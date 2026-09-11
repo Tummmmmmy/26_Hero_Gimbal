@@ -1121,6 +1121,11 @@
               <FilePath>..\Modules\Servo_control.c</FilePath>
             </File>
             <File>
+              <FileName>can_transmit.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\can_transmit.c</FilePath>
+            </File>
+            <File>
               <FileName>bridge.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\bridge.c</FilePath>

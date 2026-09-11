@@ -13,4 +13,7 @@
 // FDCAN 硬件层初始化：配置滤波器、启动 FDCAN1/2/3，并开启 RX FIFO0 接收中断
 void BSP_FDCAN_Config(void);
 
+
+// 底层发送一帧（标准帧 + Classic CAN），自动检查 TX FIFO 是否空闲
+void BSP_CAN_Send(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, uint8_t* data, uint32_t dlc);
 #endif

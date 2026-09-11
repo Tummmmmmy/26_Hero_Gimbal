@@ -67,3 +67,25 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         }
     }
 }
+
+
+// 底层发送一帧：标准帧 + Classic CAN，TX FIFO 有空位时写入
+void BSP_CAN_Send(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, uint8_t* data, uint32_t dlc)
+{
+    FDCAN_TxHeaderTypeDef TxHeader;
+
+    TxHeader.Identifier = std_id;
+    TxHeader.IdType = FDCAN_STANDARD_ID;
+    TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+    TxHeader.DataLength = dlc;
+    TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+    TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+    TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    TxHeader.MessageMarker = 0;
+
+    if (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) > 0)
+    {
+        HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &TxHeader, data);
+    }
+}
