@@ -51,120 +51,18 @@
 #include "Ramp.h"
 #include "bsp_dwt.h"
 #include "Servo_control.h"
+#include "pid_controller.h"
+#include "robot_mode.h"
+#include "shooter_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 #define ABS(x) ((x) > 0 ? (x) : -(x))
 
-
-//机器人模式
-typedef enum
-{
-    ROBOT_MODE_OFF = 0,             //失能(双下)
-    ROBOT_MODE_GIMBAL_ONLY,         //云台(左下右上)
-    ROBOT_MODE_CHASSIS_ONLY,        //底盘(左下右中)
-    ROBOT_MODE_FOLLOW,              //跟随(双中)
-    ROBOT_MODE_SHOOT,               //吊射发射(左上右中)
-	  ROBOT_MODE_SHOOT_LOW,           //低速发射(左中右上)
-    ROBOT_MODE_AIMING,              //自瞄(双上)
-	  ROBOT_MODE_M_AIMING,            //手动自瞄发射(左中右上)
-	  ROBOT_MODE_CLIMB,               //上坎(左中右下)
-	  ROBOT_MODE_BATTLE               //键鼠模式
-} Robot_Mode_e;
 volatile Robot_Mode_e robot_mode = ROBOT_MODE_OFF;
-
-
-
-//云台模式
-typedef enum
-{
-    GIMBAL_MODE_IMU,      //IMU闭环
-    GIMBAL_MODE_ENCODER   //编码器闭环
-} Gimbal_Mode_e;
 volatile Gimbal_Mode_e gimbal_mode = GIMBAL_MODE_IMU;
-
-
-
-//发射状态枚举
-typedef enum
-{
-    SHOOTER_OFF,            //关闭
-    SHOOTER_CALIBRATING,    //校准
-    SHOOTER_READY,          //准备
-    SHOOTER_SINGLE_SHOT,    //单发
-    SHOOTER_JAMMED          //卡弹处理
-} Shooter_State_e;
-
-
-
-//发射控制结构体
-typedef struct
-{
-    Shooter_State_e state;       //当前状态
-    float friction_target_speed; //目标速度(rpm)
-	  float friction_linear_ratio; //线速度比例
-	  uint8_t friction_state;      //是否开启摩擦轮 0:关闭, 1:开启
-    
-    float dial_target_rad;     //拨盘的目标角度
-    float dial_last_normal_rad;//上一次正常的位置
-    
-    uint8_t single_shot_fired_flag;//单发已触发标志位
-    
-    uint16_t continuous_fire_timer; //连发频率计时器
-    
-	  
-    uint16_t jam_detect_timer;   //卡弹检测计时器
-    uint16_t jam_timeout_timer;  //卡弹处理超时计时器
-	  uint8_t jam_process_step;    //0:正在退, 1:正在等
-	
-	  uint8_t is_calibrated;      //是否已完成校准
-    uint8_t homing_step;        //校准步骤(0:找限位, 1:回固定距离)
-    uint16_t homing_timer;      //校准计时器
-    
-} Shooter_Controller_t;
-
-
-
-//实弹检测状态
-typedef enum 
-{
-    SHOT_NOT_DETECTED = 0,
-    SHOT_DETECTED = 1        //检测到实弹
-} Shot_Detection_e;
-
-
-
-//陀螺仪数据
-typedef struct
-{
-    float yaw_angle;    //IMU的Yaw角度
-    float pitch_angle;  //IMU的Pitch角度
-    float yaw_gyro;     //IMU的Yaw角速度
-    float pitch_gyro;   //IMU的Pitch角速度
-} IMU_Data_t;
-
-
-
-//气动上坡模式枚举
-typedef enum {
-    CLIMB_MODE_OFF,         //关闭
-    CLIMB_MODE_STANDBY,     //待命
-    CLIMB_MODE_ACTIVE       //激活
-} Climb_Mode_e;
-
 static Climb_Mode_e climb_mode = CLIMB_MODE_OFF;
-
-
-
-//键鼠模式枚举
-typedef enum {
-	  BATTLE_OFF = 0,      //失能
-    BATTLE_FOLLOW = 1,   //正常跟随
-    BATTLE_GIMBAL = 2,   //底盘锁死(Ctrl键，IMU模式)
-    BATTLE_LOB    = 3    //吊射模式(B键，编码器模式)
-} Battle_Mode_e;
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -505,8 +403,6 @@ void Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_HandleTypeDef* hfdca
 //初始化达秒电机
 void DM_Motor_Init(Motor_Controller* motor, uint8_t id, FDCAN_HandleTypeDef* hfdcan);
 
-//初始化PID
-void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float Integral_Limit, float MaxOutput);
 
 //初始化电机参数
 void Robot_Param_Init(void);
@@ -514,12 +410,8 @@ void Robot_Param_Init(void);
 //初始化发射
 void Shooter_Init(void);
 
-//位置式pid计算
-float PID_Calculate(PID_Controller *pid, float target, float measured);
 
-float PID_Cal_Enhanced(PID_Controller *pid, float target, float measured);
 
-float PID_Cal_Increment(PID_Controller *pid, float target, float measured);
 
 //使能达妙电机
 void DM_Motor_Enable(void);
@@ -663,24 +555,6 @@ void Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_HandleTypeDef* hfdca
 
 
 
-float separation_threshold = 0.0f;
-float dead_band = 0.0f;
-//初始化PID
-void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float Integral_Limit, float MaxOutput)
-{
-    memset(pid, 0, sizeof(PID_Controller));
-    pid->Kp = Kp;
-    pid->Ki = Ki;
-    pid->Kd = Kd;
-    pid->MaxOutput = MaxOutput;
-    pid->Integral_Limit = Integral_Limit;
-    
-    pid->integral_separation_threshold = separation_threshold;//积分分离阈值
-	  pid->dead_band = dead_band;
-}
-
-
-
 //初始化电机参数
 void Robot_Param_Init(void)
 {
@@ -734,95 +608,6 @@ void Shooter_Init(void)
     memset(&shooter_controller, 0, sizeof(Shooter_Controller_t));
     shooter_controller.state = SHOOTER_OFF;
     shooter_controller.is_calibrated = 0;
-}
-
-
-
-//位置式pid计算
-float PID_Calculate(PID_Controller *pid, float target, float measured )
-{
-    pid->target = target;
-    pid->measured = measured;
-    pid->error = pid->target - pid->measured;
-
-    pid->p_out = pid->Kp * pid->error;
-
-    pid->i_out += pid->Ki * pid->error;
-
-    if(pid->i_out > pid->Integral_Limit) pid->i_out = pid->Integral_Limit;//积分限幅
-    else if(pid->i_out < -pid->Integral_Limit) pid->i_out = -pid->Integral_Limit;
-
-    pid->d_out = pid->Kd * (pid->error - pid->pre_error);
-
-    float output = pid->p_out + pid->i_out + pid->d_out;
-
-    if(output > pid->MaxOutput) {output = pid->MaxOutput;}//输出限幅
-    else if(output < -pid->MaxOutput) {output = -pid->MaxOutput;}
-
-    pid->pre_error = pid->error;
-    return output;
-}
-
-
-
-float PID_Cal_Enhanced(PID_Controller *pid, float target, float measured)
-{
-    pid->error = target - measured;
-    
-    //死区
-		if(fabs(pid->error) < pid->dead_band) pid->p_out = pid->Kp * 0.1f * pid->error; 
-		else pid->p_out = pid->Kp * pid->error;
-
-    pid->p_out = pid->Kp * pid->error;
-
-    //积分分离
-    if(fabs(pid->error) < pid->integral_separation_threshold)
-    {
-        pid->i_out += pid->Ki * pid->error;
-			
-        //积分限幅
-        if(pid->i_out > pid->Integral_Limit) pid->i_out = pid->Integral_Limit;
-        else if (pid->i_out < -pid->Integral_Limit) pid->i_out = -pid->Integral_Limit;
-    }
-
-    //微分先行
-    pid->d_out = pid->Kd * (pid->pre_measured - measured); 
-    
-    pid->output = pid->p_out + pid->i_out + pid->d_out;
-
-    pid->pre_error = pid->error;
-    pid->pre_measured = measured;
-
-    if(pid->output > pid->MaxOutput) pid->output = pid->MaxOutput;
-    else if (pid->output < -pid->MaxOutput) pid->output = -pid->MaxOutput;
-
-    return pid->output;
-}
-
-
-
-float PID_Cal_Increment(PID_Controller *pid, float target, float measured)
-{
-    pid->target = target;
-    pid->measured = measured;
-    pid->error = pid->target - pid->measured;
-
-    pid->p_out = pid->Kp * (pid->error - pid->pre_error);
-    pid->i_out = pid->Ki * pid->error;
-    pid->d_out = pid->Kd * (pid->error - 2.0f * pid->pre_error + pid->err_beforeLast);
-    
-    float delta_output = pid->p_out + pid->i_out + pid->d_out;
-    
-    pid->output += delta_output;
-
-    //输出限幅
-    if (pid->output > pid->MaxOutput) pid->output = pid->MaxOutput;
-    if (pid->output < -pid->MaxOutput) pid->output = -pid->MaxOutput;
-
-    pid->err_beforeLast = pid->pre_error;
-    pid->pre_error = pid->error;
-
-    return pid->output;
 }
 
 

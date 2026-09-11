@@ -3,6 +3,14 @@
 
 #include "main.h"
 
+typedef struct
+{
+    float yaw_angle;
+    float pitch_angle;
+    float yaw_gyro;
+    float pitch_gyro;
+} IMU_Data_t;
+
 extern float total_yaw;
 extern float pitch;
 extern uint8_t attitude_flag;

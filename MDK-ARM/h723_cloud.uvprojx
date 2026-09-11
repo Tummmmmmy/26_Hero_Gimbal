@@ -1058,6 +1058,11 @@
               <FilePath>..\Algorithm\pid.c</FilePath>
             </File>
             <File>
+              <FileName>pid_controller.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Algorithm\pid_controller.c</FilePath>
+            </File>
+            <File>
               <FileName>smc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Algorithm\smc.c</FilePath>
@@ -1124,6 +1129,16 @@
               <FileName>hero_protocol.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Modules\hero_protocol.h</FilePath>
+            </File>
+            <File>
+              <FileName>robot_mode.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Modules\robot_mode.h</FilePath>
+            </File>
+            <File>
+              <FileName>shooter_control.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Modules\shooter_control.h</FilePath>
             </File>
           </Files>
         </Group>
