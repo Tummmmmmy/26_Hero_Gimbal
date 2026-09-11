@@ -35,6 +35,7 @@
 #include "usb_device.h"
 #include "bsp_dwt.h"
 #include "Servo_control.h"
+#include "bsp_can.h"
 
 
 //#include "math.h"

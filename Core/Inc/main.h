@@ -120,8 +120,6 @@ extern volatile LED_State_e led_state;
 //初始化
 extern void Robot_Param_Init(void);
 
-//FDCAN通用配置
-extern void BSP_FDCAN_Config(void);
 
 
 /* USER CODE END Includes */
