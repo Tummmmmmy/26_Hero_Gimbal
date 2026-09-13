@@ -58,6 +58,8 @@
 #include "can_transmit.h"
 /* USER CODE END Includes */
 
+
+
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 #define ABS(x) ((x) > 0 ? (x) : -(x))
@@ -84,10 +86,6 @@ static Climb_Mode_e climb_mode = CLIMB_MODE_OFF;
 #define RX_CHASSIS_DATA_ID 0x304
 
 volatile uint8_t color = 2;//颜色 (0=蓝, 1=红)
-volatile uint16_t shooter_heat = 0;
-volatile float initial_speed = 0.0f;
-volatile uint16_t heat_limit = 100.0f;
-volatile uint16_t shooter_cooling = 20.0f;
 uint8_t is_referee_online = 1;
 
 
@@ -248,7 +246,6 @@ float gimbal_pitch_epsilon_rader = 3000.0f;    // epsilon: 等速趋近 (克服静摩擦)
 float gimbal_pitch_beta_rader = 40.0f;       // beta: 干扰观测器增益                  //40
 
 
-uint32_t gap = 200;
 //发射
 #define DM_DIAL_SEND_ID 0x07 
 #define DM_DIAL_RECEIVE_ID 0x17
@@ -267,117 +264,18 @@ uint32_t gap = 200;
 
 //目标转速
 static uint8_t fric_level = 0; //键鼠摩擦轮档位 0:关,   1:12m/s,   2:16m/s
-float ratio = 0.784f;
 
-//16.5m/s
-uint32_t high_speed = 4450.0f;       //4990.0     5090.0f      5140.0f
-uint16_t fric_offset = 0;
-#define FRICTION_TARGET_SPEED_HIGH high_speed
-#define FRICTION_RATIO_HIGH ratio
-
-//12m/s
-uint32_t low_speed = 3210.0f;
-float low_ratio = 0.56f;
-#define FRICTION_TARGET_SPEED_LOW  low_speed
-
-#define FRICTION_RATIO_LOW        low_ratio
 
 
 //摩擦轮半径
-#define WHEEL_RADIUS_INNER  35.0f //一级半径
-#define WHEEL_RADIUS_OUTER  35.0f // 二级半径  30.0f
 
 //拨盘
-#define DIAL_ONE_SHOOT_ENCODER PI / 3.0f    //一发编码器值
 #define CONTINUOUS_FIRE_RATE 2000 //4200    //连发频率: 100ms/发(10Hz 100, 15Hz 66 , 20Hz 50, 25Hz 40)
 
 
 //卡弹参数
-#define DIAL_JAM_CURRENT_THRESHOLD 6.0f     //判定卡弹的电流阈值
-#define DIAL_JAM_SPEED_THRESHOLD 1.5f       //判定卡弹的速度阈值(rpm)
-#define DIAL_JAM_DETECT_THRESHOLD 100       //持续100ms判定为卡弹
-#define DIAL_JAM_WAIT_TIME 400              //回退后等待400ms
 
 
-float dial_back = 0.445f;//0.49
-
-//校准参数
-#define DIAL_HOMING_SPEED -2.2f  //-2.5            //反转速度    2.2f
-#define DIAL_HOMING_CURRENT_THRESHOLD 1.0f   //撞限位的电流阈值   0.75f
-#define DIAL_HOMING_SPEED_THRESHOLD 2.05f     //撞限位的速度阈值     1.1f
-#define DIAL_HOMING_OFFSET dial_back         //撞限位后回退距离
-#define DIAL_HOMING_CHECK_DELAY 200          //刚启动反转时忽略电流检测的时间，防误判
-
-
-//热量参数
-float shooter_predict_heat = 0.0f;          //预测热量
-#define HERO_HEAT_PER_SHOT 100.0f           //英雄每发热量
-#define HEAT_SAFETY_MARGIN 5.0f             //安全余量(两发间隔)
-
-
- //记录上次发射时刻
- uint32_t last_shoot_time = 0;
-
-Shooter_Controller_t shooter_controller;
-Shot_Detection_e current_shot_status = SHOT_NOT_DETECTED;
-
-
-
-Motor_Controller dial_motor;
-Motor_Controller friction_motor_inner_left;
-Motor_Controller friction_motor_inner_right;
-Motor_Controller friction_motor_inner_up;
-
-Motor_Controller friction_motor_outer_left;
-Motor_Controller friction_motor_outer_right;
-Motor_Controller friction_motor_outer_up;
-
-
-
-//拨盘电机PID参数
-//位置环
-const float dial_angle_kp = 12.0f;//15
-const float dial_angle_ki = 0.0f;
-const float dial_angle_kd = 0.0f;
-const float dial_angle_Integral_Limit = 1.0f;
-const float dial_angle_MaxOutput = 25.0f;//最大目标速度RPM
-
-//速度环
-const float dial_speed_kp = 0.3f;
-const float dial_speed_ki = 0.0f;
-const float dial_speed_kd = 0.0f;
-const float dial_speed_Integral_Limit = 2.0f;
-const float dial_speed_MaxOutput = 5.0f;
-
-
-
-//摩擦轮电机PID参数
-//16.5m/s
-float friction_speed_kp_inner_high = 4.0f;
-float friction_speed_ki_inner_high = 0.0f;
-float friction_speed_kd_inner_high = 0.0f;
-
-float friction_speed_kp_outer_high = 10.0f;
-float friction_speed_ki_outer_high = 0.0f;
-float friction_speed_kd_outer_high = 0.0f;
-
-//12m/s
-float friction_speed_kp_inner_low = 8.0f;
-float friction_speed_ki_inner_low = 0.0f;
-float friction_speed_kd_inner_low = 0.0f;
-
-float friction_speed_kp_outer_low = 10.0f;
-float friction_speed_ki_outer_low = 0.0f;
-float friction_speed_kd_outer_low = 0.0f;
-
-
-const float friction_speed_Integral_Limit = 50.0f;
-const float friction_speed_MaxOutput = 16380.0f;
-
-static float last_fric_kp_inner = 0.0f;
-
-
-//底盘跟随PID参数
 float chassis_follow_kp = 0.2f;//350.0f
 float chassis_follow_ki = 0.0f;
 float chassis_follow_kd = 0.0f;
@@ -406,16 +304,6 @@ void DM_Motor_Init(Motor_Controller* motor, uint8_t id, FDCAN_HandleTypeDef* hfd
 void Robot_Param_Init(void);
 
 //初始化发射
-void Shooter_Init(void);
-
-
-
-
-//使能达妙电机
-void DM_Motor_Enable(void);
-
-
-//更新云台yaw轴角度
 void Gimbal_Angle_Update(Motor_Controller *motor, float encoder_range);
 
 
@@ -426,16 +314,12 @@ void Gimbal_Angle_Update(Motor_Controller *motor, float encoder_range);
 void Robot_Control_Loop(const IMU_Data_t* imu_data);
 
 //发射控制
-void Shooter_Control_Loop(void);
 
 //检测是否发射弹丸
-void Shooter_Check_Real_Fire(void);
 
 //热量模拟
-void Shooter_Update_Heat(void);
 
 //是否允许开火
-uint8_t Shooter_Check_Heat_Allowed(void);
 
 
 //CAN接收解码任务
@@ -445,7 +329,6 @@ void Can_Decode_Task(void const *argument);
 void Gimbal_Control_task(void const * argument);
 
 //重置弹道统计数据
-void Bullet_Stats_Reset(void);
 
 //更新云台Pitch电机
 void update_gimbal_pitch(const uint8_t* data);
@@ -454,10 +337,8 @@ void update_gimbal_pitch(const uint8_t* data);
 void update_gimbal_yaw(const uint8_t* data);
 
 //更新拨盘电机
-void update_dial_motor(const uint8_t* data);
 
 //更新摩擦轮电机
-void update_friction_motors(const uint8_t* data, uint32_t can_id);
 
 //更新底盘发来的信息
 void update_chassis_data(const uint8_t *data);
@@ -529,29 +410,9 @@ void Robot_Param_Init(void)
 		Motor_Init(&gimbal_pitch_motor, GIMBAL_PITCH_MOTOR_ID, &hfdcan3);
 
 	  //拨盘
-    Motor_Init(&dial_motor, DM_DIAL_SEND_ID, &hfdcan1);
-	  PID_Init(&dial_motor.pid_angle, dial_angle_kp, dial_angle_ki, dial_angle_kd, dial_angle_Integral_Limit, dial_angle_MaxOutput);
-    PID_Init(&dial_motor.pid_speed, dial_speed_kp, dial_speed_ki, dial_speed_kd, dial_speed_Integral_Limit, dial_speed_MaxOutput);
+        Shooter_Control_Init();
 
-    
-	  //摩擦轮
-    Motor_Init(&friction_motor_inner_left,  FRICTION_INNER_LEFT_ID,  &hfdcan2);
-    Motor_Init(&friction_motor_inner_right, FRICTION_INNER_RIGHT_ID, &hfdcan2);
-    Motor_Init(&friction_motor_inner_up,    FRICTION_INNER_UP_ID,    &hfdcan2);
-    
-    Motor_Init(&friction_motor_outer_left,  FRICTION_OUTER_LEFT_ID,  &hfdcan2);
-    Motor_Init(&friction_motor_outer_right, FRICTION_OUTER_RIGHT_ID, &hfdcan2);
-    Motor_Init(&friction_motor_outer_up,    FRICTION_OUTER_UP_ID,    &hfdcan2);
-		
-		PID_Init(&friction_motor_inner_left.pid_speed,  friction_speed_kp_inner_high, friction_speed_ki_inner_high, friction_speed_kd_inner_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-    PID_Init(&friction_motor_inner_right.pid_speed, friction_speed_kp_inner_high, friction_speed_ki_inner_high, friction_speed_kd_inner_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-    PID_Init(&friction_motor_inner_up.pid_speed,    friction_speed_kp_inner_high, friction_speed_ki_inner_high, friction_speed_kd_inner_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-    
-    PID_Init(&friction_motor_outer_left.pid_speed,  friction_speed_kp_outer_high, friction_speed_ki_outer_high, friction_speed_kd_outer_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-    PID_Init(&friction_motor_outer_right.pid_speed, friction_speed_kp_outer_high, friction_speed_ki_outer_high, friction_speed_kd_outer_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-    PID_Init(&friction_motor_outer_up.pid_speed,    friction_speed_kp_outer_high, friction_speed_ki_outer_high, friction_speed_kd_outer_high, friction_speed_Integral_Limit, friction_speed_MaxOutput);
-	
-	  //Yaw
+  //Yaw
 		SMC_Init(&gimbal_yaw_smc_imu, gimbal_yaw_c, gimbal_yaw_k_exp, gimbal_yaw_epsilon, gimbal_yaw_beta, gimbal_yaw_boundary, gimbal_yaw_out_max, 0.0f, 0.001f);
 	  //Pitch
 		SMC_Init(&gimbal_pitch_smc_imu, gimbal_pitch_c, gimbal_pitch_k_exp, gimbal_pitch_epsilon, gimbal_pitch_beta, gimbal_pitch_boundary, gimbal_pitch_out_max, 0.02f, 0.001f);		 
@@ -560,23 +421,12 @@ void Robot_Param_Init(void)
 	  PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, chassis_follow_Integral_Limit, chassis_follow_MaxOutput);
 	
 	  //初始化发射
-    Shooter_Init();
 }
 
 
 
 
 //初始化发射
-void Shooter_Init(void)
-{
-    memset(&shooter_controller, 0, sizeof(Shooter_Controller_t));
-    shooter_controller.state = SHOOTER_OFF;
-    shooter_controller.is_calibrated = 0;
-}
-
-
-
-//更新云台yaw轴角度
 void Gimbal_Angle_Update(Motor_Controller *motor, float encoder_range)
 {
     float half_range = encoder_range * 0.5f;//半圈值
@@ -868,7 +718,7 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
                 osDelay(500);
 
 								Reset_All_IMU_Yaw_Only();
-							  Bullet_Stats_Reset();
+							  Shooter_Reset_Stats();
 								gimbal_control_initialized = 0; 
             }
         }
@@ -1031,11 +881,7 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
     last_gimbal_mode = gimbal_mode;
 		
 
-	  if(robot_mode != ROBOT_MODE_OFF && dial_motor.state != 1 && shooter_controller.state != SHOOTER_OFF) 
-    {
-        Dial_Send_Mode_Command(&hfdcan1, 0xFC);
-    }
-		
+			
 		
 		
 		//重新使能
@@ -1044,17 +890,12 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 		    SMC_Init(&gimbal_yaw_smc_imu, gimbal_yaw_c, gimbal_yaw_k_exp, gimbal_yaw_epsilon, gimbal_yaw_beta, gimbal_yaw_boundary, gimbal_yaw_out_max, 0.0f, 0.001f);
 				SMC_Init(&gimbal_pitch_smc_imu, gimbal_pitch_c, gimbal_pitch_k_exp, gimbal_pitch_epsilon, gimbal_pitch_beta, gimbal_pitch_boundary, gimbal_pitch_out_max, 0.02f, 0.001f);		 
 
-				PID_Init(&dial_motor.pid_angle, dial_angle_kp, dial_angle_ki, dial_angle_kd, dial_angle_Integral_Limit, dial_angle_MaxOutput);
-				PID_Init(&dial_motor.pid_speed, dial_speed_kp, dial_speed_ki, dial_speed_kd, dial_speed_Integral_Limit, dial_speed_MaxOutput);
-			
-        last_fric_kp_inner = 0.0f;
+				Shooter_On_Robot_Start();
 			
 			  PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, chassis_follow_Integral_Limit, chassis_follow_MaxOutput);
 			
         rc_target_world_yaw_angle = imu_data->yaw_angle;
         rc_target_world_pitch_angle = imu_data->pitch_angle;
-			
-		  	Dial_Send_Mode_Command(&hfdcan1, 0xFC);
     }
 		
 		
@@ -1229,14 +1070,12 @@ switch(robot_mode)
 										PID_Init(&gimbal_pitch_motor.pid_speed, gimbal_pitch_speed_kp_encoder, gimbal_pitch_speed_ki_encoder, gimbal_pitch_speed_kd_encoder, 0, 0);
 								}
 							
-								PID_Init(&dial_motor.pid_angle, dial_angle_kp, dial_angle_ki, dial_angle_kd, 0, 0);
-								PID_Init(&dial_motor.pid_speed, dial_speed_kp, dial_speed_ki, dial_speed_kd, 0, 0);			
+								Shooter_On_Robot_Off();
 								
 							  PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, 0, 0);
 							
 								gimbal_yaw_motor.target_current = 0;
 								gimbal_pitch_motor.target_current = 0;
-							  dial_motor.target_torque = 0.0f;
 							
                 LK_Send_Torque(&hfdcan1, 0);
 								DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
@@ -1244,14 +1083,11 @@ switch(robot_mode)
 								DJI_Motor_Send_Command(&hfdcan2, 0x200, 0, 0, 0, 0);
 								
 								Dial_Send_Speed(&hfdcan1, 0);
-								Dial_Send_Mode_Command(&hfdcan1, 0xFD);
 							
 								send_vx = 0; send_vy = 0; send_wz = 0;
                 send_mode = 0;  supercap_cmd = 0;
 
-							  shooter_controller.state = SHOOTER_OFF;
 								fric_level = 0;
-                Shooter_Control_Loop(); 
 						}
 					
             if(gimbal_control_initialized && last_robot_mode == ROBOT_MODE_OFF)
@@ -1584,11 +1420,11 @@ switch(robot_mode)
 						
 						//调整摩擦轮转速
 						float offset_step = 10;//每次点按补偿10
-						if(rc->key.map.G && rc->key.map.W && !key_W_last_state) high_speed += offset_step;
-						if(rc->key.map.G && rc->key.map.S && !key_S_last_state) high_speed -= offset_step;
+						if(rc->key.map.G && rc->key.map.W && !key_W_last_state) Shooter_Tune_High_Speed((int32_t)offset_step);
+						if(rc->key.map.G && rc->key.map.S && !key_S_last_state) Shooter_Tune_High_Speed(-(int32_t)offset_step);
 
-						if(rc->key.map.F && rc->key.map.W && !key_W_last_state) low_speed += offset_step;
-						if(rc->key.map.F && rc->key.map.S && !key_S_last_state) low_speed -= offset_step;
+						if(rc->key.map.F && rc->key.map.W && !key_W_last_state) Shooter_Tune_Low_Speed((int32_t)offset_step);
+						if(rc->key.map.F && rc->key.map.S && !key_S_last_state) Shooter_Tune_Low_Speed(-(int32_t)offset_step);
 						
 						
             key_W_last_state = rc->key.map.W;
@@ -1712,7 +1548,7 @@ switch(robot_mode)
             send_mode = 1;
 						supercap_cmd = 0;
 						
-						shooter_controller.state = SHOOTER_OFF;
+						Shooter_Control_Disable();
 					
          break;
         }
@@ -1780,7 +1616,7 @@ switch(robot_mode)
 						
 						if(control_source != CONTROL_SOURCE_VTM) 
 						{
-					     	shooter_controller.state = SHOOTER_OFF;
+						Shooter_Control_Disable();
 						}
 					
 						battle_mode = BATTLE_FOLLOW;
@@ -1985,7 +1821,7 @@ switch(robot_mode)
             if(ABS(rc->rc.left_y) > 600) supercap_cmd = 1;
             else supercap_cmd = 0;
 
-            shooter_controller.state = SHOOTER_OFF;
+						Shooter_Control_Disable();
 					
 				    rc_target_world_yaw_angle = imu_data->yaw_angle;
             rc_target_world_pitch_angle = imu_data->pitch_angle;
@@ -2037,7 +1873,7 @@ switch(robot_mode)
 							rc_target_world_yaw_angle = imu_data->yaw_angle;
 					}
 
-            shooter_controller.state = SHOOTER_OFF;
+            Shooter_Control_Disable();
             break;
         }
  }
@@ -2165,19 +2001,99 @@ switch(robot_mode)
         gimbal_pitch_motor.target_current = 0;
     }
 		
-        Shooter_Control_Loop();
-		
+        Shooter_Set_System_State(robot_mode == ROBOT_MODE_OFF,
+                                 robot_mode == ROBOT_MODE_AIMING,
+                                 (robot_mode == ROBOT_MODE_BATTLE && is_aiming_now == 1),
+                                 ABS(rc->rc.wheel) < 100);
+
+        static bool f_key_last = false;
+        if (rc->key.map.F && !f_key_last) fric_level = 1;
+        f_key_last = rc->key.map.F;
+
+        static bool g_key_last = false;
+        if (rc->key.map.G && !g_key_last) fric_level = 2;
+        g_key_last = rc->key.map.G;
+
+        Shooter_Cmd_t shoot_cmd = {0};
+        shoot_cmd.use_referee_heat_limit = (control_source == CONTROL_SOURCE_VTM);
+
+        if (control_source == CONTROL_SOURCE_VTM)
+        {
+            if (fric_level == 1) shoot_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
+            else if (fric_level == 2) shoot_cmd.fric_mode = SHOOTER_MODE_HIGH_SPEED;
+        }
+        else
+        {
+            if (robot_mode == ROBOT_MODE_SHOOT || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_ENCODER))
+                shoot_cmd.fric_mode = SHOOTER_MODE_HIGH_SPEED;
+            else if (robot_mode == ROBOT_MODE_SHOOT_LOW || robot_mode == ROBOT_MODE_AIMING || robot_mode == ROBOT_MODE_M_AIMING || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_IMU))
+                shoot_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
+        }
+
+        uint8_t shooter_armed =
+            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_MID) ||
+            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_UP) ||
+            (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_UP) ||
+            (robot_mode == ROBOT_MODE_BATTLE && (fric_level == 1 || fric_level == 2)) ||
+            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_DOWN);
+        if (!shooter_armed) shoot_cmd.fric_mode = SHOOTER_MODE_OFF;
+
+        static bool mouse_l_last_state = false;
+        bool mouse_l_just_pressed = (rc->mouse.press_l && !mouse_l_last_state);
+        mouse_l_last_state = rc->mouse.press_l;
+
+        static bool mouse_m_last_state = false;
+        bool mouse_m_just_pressed = (rc->mouse.press_middle && !mouse_m_last_state);
+        mouse_m_last_state = rc->mouse.press_middle;
+
+        if (rc->rc.wheel > 250 && robot_mode != ROBOT_MODE_AIMING)
+        {
+            shoot_cmd.fire_command = 1;
+        }
+        if (robot_mode == ROBOT_MODE_AIMING && Vision_IsOnline() && VisionData.is_tracking == 1 && VisionData.cmd_mode == 2)
+        {
+            shoot_cmd.fire_command = 1;
+        }
+        if (mouse_m_just_pressed) shoot_cmd.fire_command = 1;
+        if (is_aiming_now)
+        {
+            if (rc->mouse.press_l && VisionData.cmd_mode == 2) shoot_cmd.fire_command = 1;
+        }
+        else if (mouse_l_just_pressed)
+        {
+            shoot_cmd.fire_command = 1;
+        }
+
+        Shooter_Control_Update(&shoot_cmd);
+        const Shooter_Output_t *shooter_out = Shooter_Get_Output();
+        if (shooter_out->dial_mode_cmd)
+        {
+            Dial_Send_Mode_Command(&hfdcan1, shooter_out->dial_mode_cmd);
+        }
+
 	    	LK_Send_Torque(&hfdcan1, gimbal_yaw_current);
 		
 		    DJI_Motor_Send_Command(&hfdcan3, 0x1FF, gimbal_pitch_current, 0, 0, 0);
 
 
-        DJI_Motor_Send_Command(&hfdcan2, 0x200, friction_motor_outer_left.target_current, friction_motor_outer_right.target_current, friction_motor_outer_up.target_current, 0);
-        DJI_Motor_Send_Command(&hfdcan2, 0x1FF, friction_motor_inner_left.target_current, friction_motor_inner_right.target_current, friction_motor_inner_up.target_current ,0);
+        DJI_Motor_Send_Command(&hfdcan2, 0x200, shooter_out->friction_current_outer_left, shooter_out->friction_current_outer_right, shooter_out->friction_current_outer_up, 0);
+        DJI_Motor_Send_Command(&hfdcan2, 0x1FF, shooter_out->friction_current_inner_left, shooter_out->friction_current_inner_right, shooter_out->friction_current_inner_up, 0);
 		
-        Send_Chassis_Command(&hfdcan1, send_vx, send_vy, send_wz, send_mode, supercap_cmd, climb_cmd, led_cmd, key_shift, shooter_controller.friction_state ,is_base_locked, battle_mode);
+        uint8_t friction_report = 0;
+        if (shooter_out->friction_ready)
+        {
+            if (control_source == CONTROL_SOURCE_VTM)
+            {
+                friction_report = (shoot_cmd.fric_mode == SHOOTER_MODE_LOW_SPEED) ? 1 : 2;
+            }
+            else
+            {
+                friction_report = (shoot_cmd.fric_mode == SHOOTER_MODE_HIGH_SPEED) ? 1 : 2;
+            }
+        }
+        Send_Chassis_Command(&hfdcan1, send_vx, send_vy, send_wz, send_mode, supercap_cmd, climb_cmd, led_cmd, key_shift, friction_report, is_base_locked, battle_mode);
 
-		    Dial_Send_Speed(&hfdcan1, dial_motor.target_speed);
+		    Dial_Send_Speed(&hfdcan1, shooter_out->dial_target_speed);
 		
 				static uint32_t ui_send_cnt = 0;
 				if (++ui_send_cnt >= 50) 
@@ -2187,7 +2103,7 @@ switch(robot_mode)
 						float yaw_deg = gimbal_yaw_motor.mechanical_degree; 
 						float pit_deg = PITCH_HORIZON_DEGREE - gimbal_pitch_motor.mechanical_degree;
 
-						Send_Chassis_UI_Data(&hfdcan1, yaw_deg, pit_deg, shooter_controller.friction_target_speed);
+						Send_Chassis_UI_Data(&hfdcan1, yaw_deg, pit_deg, shooter_out->friction_target_speed);
 				}
         last_robot_mode = robot_mode;
 }
@@ -2202,979 +2118,6 @@ switch(robot_mode)
 
 
 
-//检查摩擦轮是否全部就绪
-static uint8_t Check_Friction_Ready(void)
-{
-	  //是否在线
-    if (!friction_motor_inner_left.is_online  ||
-        !friction_motor_inner_right.is_online ||
-        !friction_motor_inner_up.is_online    ||
-        !friction_motor_outer_left.is_online  ||
-        !friction_motor_outer_right.is_online ||
-        !friction_motor_outer_up.is_online)
-    {
-        return 0;
-    }
-		
-		
-		//是否在转
-    if (ABS(friction_motor_inner_left.feedback.actual_speed)  < 250.0f ||
-        ABS(friction_motor_inner_right.feedback.actual_speed) < 250.0f ||
-        ABS(friction_motor_inner_up.feedback.actual_speed)    < 250.0f ||
-        ABS(friction_motor_outer_left.feedback.actual_speed)  < 800.0f ||
-        ABS(friction_motor_outer_right.feedback.actual_speed) < 800.0f ||
-        ABS(friction_motor_outer_up.feedback.actual_speed)    < 800.0f)
-    {
-        return 0;
-    }
-    return 1;
-}
-
-
-
-
-//弹速自适应控制参数
-#define SPEED_TARGET_HIGH      16.3f  //弹速上限(超过此值减速)
-#define SPEED_TARGET_LOW       16.1f  //弹速下限(低于此值加速)
-#define RPM_ADJUST_STEP        5.0f  //摩擦轮每次微调的步进(RPM)  //5
-#define MAX_AUTO_OFFSET        0.0f //最大允许补偿值          //25
-
-#define MAX_WINDOW_SIZE        80
-
-
-//波形
-float print_initial_speed = 0.0f;       //要打印的弹速
-static uint16_t vofa_timer = 0;      //持续计时器
-float bullet_speed_avg = 0.0f;       //平均弹速
-float bullet_speed_range = 0.0f;     //极差
-float bullet_speed_variance = 0.0f;  //方差
-uint32_t total_shot_count = 0;       //发射数
-
-
-float auto_speed_offset = 0.0f;     //最终摩擦轮补偿值
-
-float speed_window[MAX_WINDOW_SIZE] = {0};
-
-
-uint8_t high_speed_count = 0;    //连续超速计数器
-uint8_t low_speed_count = 0;     //连续低速计数器
-float last_referee_speed = 0.0f; //上一次的弹速
-static uint32_t shoot_seq_cnt = 0; //记录一轮射击打到了第几发
-float pending_speed = 0.0f; //暂存上一发的弹速
-
-
-
-//统计弹速数据
-static void process_new_bullet_speed(float new_speed)
-{
-    total_shot_count++;
-
-    uint8_t current_index = (total_shot_count - 1) % MAX_WINDOW_SIZE; 
-    speed_window[current_index] = new_speed;
-
-    uint8_t valid_count = (total_shot_count < MAX_WINDOW_SIZE) ? total_shot_count : MAX_WINDOW_SIZE;
-    if (valid_count == 0) return;
-
-    //计算 平均值, 最大值, 最小值
-    float sum = 0.0f;
-    float max_speed = speed_window[0];
-    float min_speed = speed_window[0];
-
-    for(uint8_t i = 0; i < valid_count; i++)
-  	{
-        sum += speed_window[i];
-        if (speed_window[i] > max_speed) max_speed = speed_window[i];
-        if (speed_window[i] < min_speed) min_speed = speed_window[i];
-    }
-    
-    bullet_speed_avg = sum / valid_count;
-    bullet_speed_range = max_speed - min_speed;
-    
-    //计算方差
-    float variance_sum = 0.0f;
-    for (uint8_t i = 0; i < valid_count; i++)
-		{
-        variance_sum += (speed_window[i] - bullet_speed_avg) * (speed_window[i] - bullet_speed_avg);
-    }
-    bullet_speed_variance = variance_sum / valid_count;
-}
-
-
-
-
-/**
-  * @brief  重置弹道统计数据和自适应补偿
-  */
-void Bullet_Stats_Reset(void)
-{
-    //清空滑动窗口数组
-    memset(speed_window, 0, sizeof(speed_window));
-    
-    //重置计数器和索引
-    total_shot_count = 0;
-    shoot_seq_cnt = 0;
-    
-    //清空统计结果
-    bullet_speed_avg = 0.0f;
-    bullet_speed_range = 0.0f;
-    bullet_speed_variance = 0.0f;
-    
-    high_speed_count = 0;
-    low_speed_count = 0;
-}
-
-
-
-
-//弹速自调整
-void Bullet_Speed_Adaptive_Control(float latest_speed)
-{
-    //连续两发高,减速
-    if(latest_speed > SPEED_TARGET_HIGH)
-    {
-        high_speed_count++;
-        low_speed_count = 0; 
-        
-        if(high_speed_count >= 2) 
-        {
-            auto_speed_offset -= RPM_ADJUST_STEP;
-            high_speed_count = 0;
-        }
-    }
-    //连续两发低,加速
-    else if (latest_speed < SPEED_TARGET_LOW)
-    {
-        low_speed_count++;
-        high_speed_count = 0; 
-        
-        if(low_speed_count >= 2) 
-        {
-            auto_speed_offset += RPM_ADJUST_STEP;
-            low_speed_count = 0;
-        }
-    }
-    //状态良好
-    else
-    {
-        high_speed_count = 0;
-        low_speed_count = 0;
-    }
-    //限幅
-    if(auto_speed_offset > MAX_AUTO_OFFSET)  auto_speed_offset = MAX_AUTO_OFFSET;
-    if(auto_speed_offset < -MAX_AUTO_OFFSET) auto_speed_offset = -MAX_AUTO_OFFSET;
-}
-
-
-
-
-
-uint32_t last_bullet_update_tick = 0;
-void Bullet_Speed_Adaptive_Process(void)
-{
-    if(initial_speed != last_referee_speed && initial_speed > 11.0f && initial_speed < 17.0f)
-    {
-			 shoot_seq_cnt++;
-			
-			 last_bullet_update_tick = osKernelGetTickCount(); 
-			
-        if(shoot_seq_cnt > 2) 
-        {
-            if(robot_mode != ROBOT_MODE_OFF)
-            {
-							  //更新统计数据
-                process_new_bullet_speed(pending_speed);
-							  //弹速自调整
-                Bullet_Speed_Adaptive_Control(pending_speed);
-							
-                print_initial_speed = initial_speed; 
-                vofa_timer = 500;
-            }
-        }
-				pending_speed = initial_speed;
-				
-        last_referee_speed = initial_speed;
-    }
-    
-    if(robot_mode == ROBOT_MODE_OFF)
-    {
-        auto_speed_offset = 0.0f;
-        high_speed_count = 0;
-        low_speed_count = 0;
-			
-			  shoot_seq_cnt = 0; 
-    }
-}
-
-
-
-
-/**
-  * @brief  拨盘电机重新上电处理
-  */
-static void Dial_Recover_Process(void)
-{
-    static uint32_t dial_power_on_time = 0;
-    static uint8_t dial_recover_step = 0;
-    static bool dial_was_offline = false;
-
-    //拨盘离线
-    if(!dial_motor.is_online)
-    {
-        dial_was_offline = true;
-        dial_recover_step = 0;
-        
-        shooter_controller.state = SHOOTER_OFF;
-        shooter_controller.single_shot_fired_flag = 0;
-        shooter_controller.continuous_fire_timer = 0;
-        shooter_controller.jam_detect_timer = 0;
-        shooter_controller.jam_timeout_timer = 0;
-        return;
-    }
-    //拨盘重新上电
-    if(dial_motor.is_online && dial_was_offline)
-    {
-        if(dial_recover_step == 0)
-        {
-            dial_power_on_time = xTaskGetTickCount(); //记录重新上线的时间戳
-            shooter_controller.state = SHOOTER_OFF;
-            dial_recover_step = 1;
-        }
-        else if(dial_recover_step == 1)
-        {
-            shooter_controller.state = SHOOTER_OFF;
-
-            //等200ms防欠压
-            if(xTaskGetTickCount() - dial_power_on_time > 200)
-            {
-                Dial_Send_Mode_Command(&hfdcan1, 0xFC);
-                
-                dial_was_offline = false;
-                dial_recover_step = 0;
-            }
-        }
-    }
-}
-
-
-
-#define USE_AUTO_CALIBRATION 1 //1:开启撞限位校准, 0:关闭校准(当前位置为零点)
-
-//发射控制
-void Shooter_Control_Loop(void)
-{
-	  //获取时间
-    uint32_t now = xTaskGetTickCount();
-	
-	  //更新热量
-    Shooter_Update_Heat();
-	
-	  //检测是否发弹
-    Shooter_Check_Real_Fire();
-	
-	  //拨盘电机重新上电处理
-	  Dial_Recover_Process();
-	
-	  //左键边缘检测
-	  static bool mouse_l_last_state = false;
-    bool mouse_l_just_pressed = (rc->mouse.press_l && !mouse_l_last_state);
-    mouse_l_last_state = rc->mouse.press_l;
-
-    //中键边缘检测
-    static bool mouse_m_last_state = false;
-    bool mouse_m_just_pressed = (rc->mouse.press_middle && !mouse_m_last_state);
-    mouse_m_last_state = rc->mouse.press_middle;
-
-    
-		//发射指令
-    uint8_t fire_command = 0;
-
-    //遥控拨轮开火
-    if(rc->rc.wheel > 250 && robot_mode != ROBOT_MODE_AIMING) 
-    {
-        fire_command = 1;
-    }
-		
-		//自瞄自动开火
-    if(robot_mode == ROBOT_MODE_AIMING && 
-						 Vision_IsOnline() && 
-						 VisionData.is_tracking == 1 && 
-						 VisionData.cmd_mode == 2)
-    {
-        fire_command = 1;
-    }
-
-    //鼠标中键开火
-    if(mouse_m_just_pressed) 
-    {
-        fire_command = 1;
-    }
-		
-    //鼠标左键开火
-    if(is_aiming_now)//锁敌自动开火
-    {
-        if(rc->mouse.press_l && VisionData.cmd_mode == 2)
-				{
-            fire_command = 1;
-        }
-    }
-    else if(mouse_l_just_pressed) 
-    {
-         fire_command = 1;
-    }
-		
-
-
-    //切换12m/s
-    static bool f_key_last = false;
-    if(rc->key.map.F && !f_key_last)
-		{
-        fric_level = 1;
-    }
-    f_key_last = rc->key.map.F;
-
-    //切换16m/s
-    static bool g_key_last = false;
-    if (rc->key.map.G && !g_key_last) {
-        fric_level = 2;
-    }
-    g_key_last = rc->key.map.G;
-		
-
-		
-	  //摩擦轮目标转速和线速度比率
-	  float friction_target_speed = 0.0f;
-    float friction_ratio = 0.85f;
-		float friction_offs = 0.0f;
-		float fric_left_kp_offs = -0.5f;//0.5
-		float fric_right_kp_offs = 0.1f;//0.1
-		
-    float cur_fric_kp_inner = friction_speed_kp_inner_high;
-    float cur_fric_ki_inner = friction_speed_ki_inner_high;
-    float cur_fric_kd_inner = friction_speed_kd_inner_high;
-    
-    float cur_fric_kp_outer = friction_speed_kp_outer_high;
-    float cur_fric_ki_outer = friction_speed_ki_outer_high;
-    float cur_fric_kd_outer = friction_speed_kd_outer_high;
-		
-    if(control_source == CONTROL_SOURCE_VTM) 
-    {
-        if(fric_level == 1)
-				{
-            friction_target_speed = FRICTION_TARGET_SPEED_LOW;
-            friction_ratio = FRICTION_RATIO_LOW;
-					  shooter_controller.friction_state = 1;
-					  friction_offs = 0.0f;
-					  fric_left_kp_offs = 0.0f;
-					  fric_right_kp_offs = 0.0f;
-					
-						cur_fric_kp_inner = friction_speed_kp_inner_low;
-						cur_fric_ki_inner = friction_speed_ki_inner_low;
-						cur_fric_kd_inner = friction_speed_kd_inner_low;
-						
-						cur_fric_kp_outer = friction_speed_kp_outer_low;
-						cur_fric_ki_outer = friction_speed_ki_outer_low;
-						cur_fric_kd_outer = friction_speed_kd_outer_low;
-        }
-				else if(fric_level == 2)
-				{
-            friction_target_speed = FRICTION_TARGET_SPEED_HIGH;
-            friction_ratio = FRICTION_RATIO_HIGH;
-					  shooter_controller.friction_state = 2;
-					  friction_offs = 0.0f;
-					  fric_left_kp_offs = -0.4f;
-					  fric_right_kp_offs = 0.1f;
-					
-					  cur_fric_kp_inner = friction_speed_kp_inner_high;
-            cur_fric_ki_inner = friction_speed_ki_inner_high;
-            cur_fric_kd_inner = friction_speed_kd_inner_high;
-            
-            cur_fric_kp_outer = friction_speed_kp_outer_high;
-            cur_fric_ki_outer = friction_speed_ki_outer_high;
-            cur_fric_kd_outer = friction_speed_kd_outer_high;
-        }
-    } 
-    else 
-    {
-					if(robot_mode == ROBOT_MODE_SHOOT || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_ENCODER))
-					{
-							friction_target_speed = FRICTION_TARGET_SPEED_HIGH;
-							friction_ratio = FRICTION_RATIO_HIGH;
-					  	shooter_controller.friction_state = 1;
-						  friction_offs = 0.0f;
-						  fric_left_kp_offs = -0.4f;
-						  fric_right_kp_offs = 0.1f;
-						
-							cur_fric_kp_inner = friction_speed_kp_inner_high;
-							cur_fric_ki_inner = friction_speed_ki_inner_high;
-							cur_fric_kd_inner = friction_speed_kd_inner_high;
-							
-							cur_fric_kp_outer = friction_speed_kp_outer_high;
-							cur_fric_ki_outer = friction_speed_ki_outer_high;
-							cur_fric_kd_outer = friction_speed_kd_outer_high;
-					}
-					else if (robot_mode == ROBOT_MODE_SHOOT_LOW || robot_mode == ROBOT_MODE_AIMING || robot_mode == ROBOT_MODE_M_AIMING || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_IMU))
-					{
-							friction_target_speed = FRICTION_TARGET_SPEED_LOW;
-							friction_ratio = FRICTION_RATIO_LOW;
-						  shooter_controller.friction_state = 2;
-					  	friction_offs = 0.0f;
-						  fric_left_kp_offs = 0.0f;
-						  fric_right_kp_offs = 0.0f;
-						
-							cur_fric_kp_inner = friction_speed_kp_inner_low;
-							cur_fric_ki_inner = friction_speed_ki_inner_low;
-							cur_fric_kd_inner = friction_speed_kd_inner_low;
-							
-							cur_fric_kp_outer = friction_speed_kp_outer_low;
-							cur_fric_ki_outer = friction_speed_ki_outer_low;
-							cur_fric_kd_outer = friction_speed_kd_outer_low;
-					}
-    }
-		
-    
-    if(cur_fric_kp_inner != last_fric_kp_inner)
-    {
-			  //一级
-        friction_motor_inner_left.pid_speed.Kp = cur_fric_kp_inner + fric_left_kp_offs;
-        friction_motor_inner_left.pid_speed.Ki = cur_fric_ki_inner;
-        friction_motor_inner_left.pid_speed.Kd = cur_fric_kd_inner;
-        friction_motor_inner_right.pid_speed.Kp = cur_fric_kp_inner + fric_right_kp_offs;
-        friction_motor_inner_right.pid_speed.Ki = cur_fric_ki_inner;
-        friction_motor_inner_right.pid_speed.Kd = cur_fric_kd_inner;
-        friction_motor_inner_up.pid_speed.Kp = cur_fric_kp_inner;
-        friction_motor_inner_up.pid_speed.Ki = cur_fric_ki_inner;
-        friction_motor_inner_up.pid_speed.Kd = cur_fric_kd_inner;
-
-			  //二级
-        friction_motor_outer_left.pid_speed.Kp = cur_fric_kp_outer;
-        friction_motor_outer_left.pid_speed.Ki = cur_fric_ki_outer;
-        friction_motor_outer_left.pid_speed.Kd = cur_fric_kd_outer;
-        friction_motor_outer_right.pid_speed.Kp = cur_fric_kp_outer;
-        friction_motor_outer_right.pid_speed.Ki = cur_fric_ki_outer;
-        friction_motor_outer_right.pid_speed.Kd = cur_fric_kd_outer;
-        friction_motor_outer_up.pid_speed.Kp = cur_fric_kp_outer;
-        friction_motor_outer_up.pid_speed.Ki = cur_fric_ki_outer;
-        friction_motor_outer_up.pid_speed.Kd = cur_fric_kd_outer;
-
-        friction_motor_inner_left.pid_speed.i_out = 0.0f;
-        friction_motor_inner_right.pid_speed.i_out = 0.0f;
-        friction_motor_inner_up.pid_speed.i_out = 0.0f;
-        friction_motor_outer_left.pid_speed.i_out = 0.0f;
-        friction_motor_outer_right.pid_speed.i_out = 0.0f;
-        friction_motor_outer_up.pid_speed.i_out = 0.0f;
-
-        last_fric_kp_inner = cur_fric_kp_inner;
-    }
-		
-		
-	  //卡弹检测
-    if(shooter_controller.state != SHOOTER_OFF && shooter_controller.state != SHOOTER_JAMMED && shooter_controller.state != SHOOTER_CALIBRATING)
-    {
-        if(ABS(dial_motor.feedback.torque) > DIAL_JAM_CURRENT_THRESHOLD&& 
-           ABS(dial_motor.feedback.velocity) < DIAL_JAM_SPEED_THRESHOLD) 
-        {
-            shooter_controller.jam_detect_timer++;
-        }
-        else 
-        {
-            if(shooter_controller.jam_detect_timer > 10)
-            {
-                shooter_controller.jam_detect_timer -= 10; 
-            }
-            else
-            {
-                shooter_controller.jam_detect_timer = 0;
-            }
-        }
-        
-				//卡弹
-        if(shooter_controller.jam_detect_timer > DIAL_JAM_DETECT_THRESHOLD)
-        {
-            shooter_controller.dial_target_rad  = dial_motor.current_total_angle_rad - DIAL_ONE_SHOOT_ENCODER * 0.75f;
-            shooter_controller.jam_detect_timer = 0;
-				  	shooter_controller.jam_timeout_timer = 0;
-					  shooter_controller.jam_process_step = 0;  //0：正在后退
-					  shooter_controller.state = SHOOTER_JAMMED;
-        }
-    }
-
-
-    //校准拨盘
-		if(shooter_controller.state != SHOOTER_JAMMED)
-    {
-        if((rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_MID) || (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_UP) || (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_UP) || (robot_mode == ROBOT_MODE_BATTLE && (fric_level == 1 || fric_level == 2 )) || (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_DOWN)) 
-        {
-					
-#if USE_AUTO_CALIBRATION 
-            //如果还没校准过
-            if(shooter_controller.is_calibrated == 0)
-            {
-                //进入校准状态
-                if(shooter_controller.state != SHOOTER_CALIBRATING)
-                {
-                    shooter_controller.state = SHOOTER_CALIBRATING;
-                    shooter_controller.homing_step = 0;
-                    shooter_controller.homing_timer = 0;
-                }
-						}
-						else
-#endif			
-            //已校准或不校准
-            if(shooter_controller.state == SHOOTER_OFF)
-            {
-								//防跳变
-								float dial_error = dial_motor.current_total_angle_rad - shooter_controller.dial_last_normal_rad;
-								
-								while(dial_error > DIAL_ONE_SHOOT_ENCODER - 0.2f) 
-								{
-										shooter_controller.dial_last_normal_rad += DIAL_ONE_SHOOT_ENCODER;
-										dial_error -= DIAL_ONE_SHOOT_ENCODER;
-								}
-								while (dial_error < -DIAL_ONE_SHOOT_ENCODER - 0.2f) 
-								{
-										shooter_controller.dial_last_normal_rad -= DIAL_ONE_SHOOT_ENCODER;
-										dial_error += DIAL_ONE_SHOOT_ENCODER;
-								}
-								
-							  shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad;
-                shooter_controller.state = SHOOTER_READY;
-            }
-        }
-        else
-        {
-            shooter_controller.state = SHOOTER_OFF;
-        }
-    }
-		
-		
-    switch(shooter_controller.state)
-    {
-        case SHOOTER_OFF:
-        {
-            shooter_controller.friction_target_speed = 0.0f;
-            shooter_controller.dial_target_rad = dial_motor.current_total_angle_rad;
-            shooter_controller.single_shot_fired_flag = 0;
-            shooter_controller.jam_detect_timer = 0;
-            break;
-        }
-				
-        case SHOOTER_CALIBRATING:
-        {
-            shooter_controller.friction_target_speed = 0.0f;
-
-            //0:反转找限位
-            if (shooter_controller.homing_step == 0)
-            {
-                shooter_controller.homing_timer++;
-                //延时检测，避开启动电流
-                if(shooter_controller.homing_timer > DIAL_HOMING_CHECK_DELAY)
-                {
-                    //撞到限位
-                    if(ABS(dial_motor.feedback.torque) > DIAL_HOMING_CURRENT_THRESHOLD &&
-                        ABS(dial_motor.feedback.velocity) < DIAL_HOMING_SPEED_THRESHOLD)
-                    {
-                        shooter_controller.dial_target_rad = dial_motor.current_total_angle_rad + DIAL_HOMING_OFFSET;
-                        shooter_controller.homing_step = 1;
-                        shooter_controller.homing_timer = 0;
-                    }
-                }
-                //超时保护
-                if(shooter_controller.homing_timer > 4000) 
-                {
-                     shooter_controller.state = SHOOTER_OFF;
-                }
-            }
-            else if (shooter_controller.homing_step == 1)
-            {
-							  //校准完成
-                if(fabs(shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad) < 0.1f)
-                {
-                    shooter_controller.is_calibrated = 1; 
-                    shooter_controller.dial_last_normal_rad = shooter_controller.dial_target_rad;
-                    shooter_controller.state = SHOOTER_READY;
-                }
-            }
-            break;
-        }
-
-        case SHOOTER_READY:
-        {
-            shooter_controller.friction_target_speed = friction_target_speed;
-            shooter_controller.friction_linear_ratio = friction_ratio;
-            shooter_controller.jam_detect_timer = 0;
-					
-					
-					
-				  	if(robot_mode == ROBOT_MODE_AIMING)
-						{
-							  gap = 5000;
-						}
-            else if (robot_mode == ROBOT_MODE_BATTLE && is_aiming_now == 1)
-            {
-                gap = 2100;
-            }
-						else
-						{
-							  gap = 200;
-						}
-					
-            uint8_t is_cooldown_ok = (now - last_shoot_time > gap);
-            					
-					
-					  if(Check_Friction_Ready() == 1)
-            {
-								if(fire_command && Shooter_Check_Heat_Allowed() && is_cooldown_ok && shooter_controller.single_shot_fired_flag == 0)
-								{
-										//直接设目标打第一发
-										shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad + DIAL_ONE_SHOOT_ENCODER;
-										
-										//先扣热量，重置检测
-										shooter_predict_heat += HERO_HEAT_PER_SHOT;
-										current_shot_status = SHOT_NOT_DETECTED;
-									
-								  	shooter_controller.single_shot_fired_flag = 1;
-									
-										shooter_controller.state = SHOOTER_SINGLE_SHOT;
-									
-									
-									  //记录发射时间
-                    last_shoot_time = now;
-								}
-								else if((robot_mode == ROBOT_MODE_AIMING && !fire_command) || (robot_mode != ROBOT_MODE_AIMING && ABS(rc->rc.wheel) < 100))
-								{
-										shooter_controller.single_shot_fired_flag = 0;//准备下次发射
-								}
-				  	}
-            break;
-        }
-
-        case SHOOTER_SINGLE_SHOT:
-        {
-            shooter_controller.friction_target_speed = friction_target_speed;
-            shooter_controller.friction_linear_ratio = friction_ratio;
-					
-            //任务完成判断
-            if(fabs(shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad) < 0.2f)
-            {
-                if(shooter_controller.dial_target_rad > shooter_controller.dial_last_normal_rad)
-                {
-                    shooter_controller.dial_last_normal_rad = shooter_controller.dial_target_rad;
-                }
-								
-							  //如果空枪，退热量
-                if(current_shot_status == SHOT_NOT_DETECTED)
-								{
-                    shooter_predict_heat -= HERO_HEAT_PER_SHOT;
-                    if(shooter_predict_heat < 0) shooter_predict_heat = 0;
-                }
-
-                shooter_controller.state = SHOOTER_READY;
-            }
-            break;
-        }
-				
-				//卡弹处理
-        case SHOOTER_JAMMED:
-        {
-            shooter_controller.friction_target_speed = friction_target_speed;
-            shooter_controller.friction_linear_ratio = friction_ratio;
-
-				  	shooter_controller.jam_timeout_timer++;
-
-            //正在后退
-            if(shooter_controller.jam_process_step == 0)
-            {
-                //是否退到了目标位置
-                if(fabs(shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad) < 0.2f)
-                {
-									  shooter_controller.jam_detect_timer = 0;
-                    shooter_controller.jam_process_step = 1;//后退完成
-                }
-            }
-            //后退后等待
-            else if (shooter_controller.jam_process_step == 1)
-            {
-                shooter_controller.jam_detect_timer++;
-
-                //等待一会
-                if(shooter_controller.jam_detect_timer > DIAL_JAM_WAIT_TIME)
-                {
-                    shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad + DIAL_ONE_SHOOT_ENCODER;
-                    
-                    shooter_controller.jam_detect_timer = 0;
-                    shooter_controller.state = SHOOTER_SINGLE_SHOT;
-                }
-            }
-						
-						//卡弹处理超时
-						if(shooter_controller.jam_timeout_timer > 2000) 
-            {
-                shooter_controller.state = SHOOTER_OFF;
-						  	shooter_controller.single_shot_fired_flag = 0;
-            }
-						
-            break;
-        }
-    }
-		
-		
-		if(shooter_controller.friction_target_speed > 1000.0f)
-    {
-					//二级目标转速
-					float target_rpm_outer = shooter_controller.friction_target_speed;
-					
-					//弹速自调整
-					Bullet_Speed_Adaptive_Process();
-					
-			//		float friction_final_rpm = friction_base_rpm + auto_speed_offset;
-					
-					
-					//一级目标转速
-					float target_rpm_inner = target_rpm_outer * (WHEEL_RADIUS_OUTER / WHEEL_RADIUS_INNER) * shooter_controller.friction_linear_ratio;
-
-					
-					//摩擦轮目标转速
-					friction_motor_inner_left.target_speed  =  target_rpm_inner;
-					friction_motor_inner_right.target_speed = -target_rpm_inner - friction_offs;//-25.0f      - 100.0f
-					friction_motor_inner_up.target_speed    = target_rpm_inner;
-
-					friction_motor_outer_left.target_speed  =  target_rpm_outer;
-					friction_motor_outer_right.target_speed = -target_rpm_outer;
-					friction_motor_outer_up.target_speed    = target_rpm_outer;
-					
-					
-					friction_motor_inner_left.target_current  = (int16_t)PID_Calculate(&friction_motor_inner_left.pid_speed,  friction_motor_inner_left.target_speed,  (float)friction_motor_inner_left.feedback.actual_speed);
-					friction_motor_inner_right.target_current = (int16_t)PID_Calculate(&friction_motor_inner_right.pid_speed, friction_motor_inner_right.target_speed, (float)friction_motor_inner_right.feedback.actual_speed);
-					friction_motor_inner_up.target_current    = (int16_t)PID_Calculate(&friction_motor_inner_up.pid_speed,    friction_motor_inner_up.target_speed,    (float)friction_motor_inner_up.feedback.actual_speed);
-					friction_motor_outer_left.target_current  = (int16_t)PID_Calculate(&friction_motor_outer_left.pid_speed,  friction_motor_outer_left.target_speed,  (float)friction_motor_outer_left.feedback.actual_speed);
-					friction_motor_outer_right.target_current = (int16_t)PID_Calculate(&friction_motor_outer_right.pid_speed, friction_motor_outer_right.target_speed, (float)friction_motor_outer_right.feedback.actual_speed);
-					friction_motor_outer_up.target_current    = (int16_t)PID_Calculate(&friction_motor_outer_up.pid_speed,    friction_motor_outer_up.target_speed,    (float)friction_motor_outer_up.feedback.actual_speed);
-			}
-			else
-			{
-					friction_motor_inner_left.target_current  = 0;
-					friction_motor_inner_right.target_current = 0;
-					friction_motor_inner_up.target_current    = 0;
-					friction_motor_outer_left.target_current  = 0;
-					friction_motor_outer_right.target_current = 0;
-					friction_motor_outer_up.target_current    = 0;
-
-					friction_motor_inner_left.pid_speed.i_out = 0.0f;
-					friction_motor_inner_left.pid_speed.pre_error = 0.0f;
-
-					friction_motor_inner_right.pid_speed.i_out = 0.0f;
-					friction_motor_inner_right.pid_speed.pre_error = 0.0f;
-
-					friction_motor_inner_up.pid_speed.i_out = 0.0f;
-					friction_motor_inner_up.pid_speed.i_out = 0.0f;
-
-					friction_motor_outer_left.pid_speed.i_out = 0.0f;
-					friction_motor_outer_left.pid_speed.pre_error = 0.0f;
-
-					friction_motor_outer_right.pid_speed.i_out = 0.0f;
-					friction_motor_outer_right.pid_speed.pre_error = 0.0f;
-
-					friction_motor_outer_up.pid_speed.i_out = 0.0f;
-					friction_motor_outer_up.pid_speed.pre_error = 0.0f;			}
-		
-		
-		//摩擦轮是否开启
-		if(Check_Friction_Ready() == 1 && shooter_controller.friction_target_speed > 200.0f)
-		{
-			
-		}
-		else shooter_controller.friction_state = 0;
- 
-		
-//		//MIT力矩控制
-//    if(shooter_controller.state != SHOOTER_OFF)
-//    {
-//        //拨盘校准
-//        if(shooter_controller.state == SHOOTER_CALIBRATING && shooter_controller.homing_step == 0)
-//        {
-//            dial_motor.target_speed = DIAL_HOMING_SPEED;
-//					  dial_motor.target_torque = PID_Calculate(&dial_motor.pid_speed, dial_motor.target_speed, dial_motor.feedback.velocity);
-//        }
-//        else
-//        {
-//            dial_motor.target_speed = PID_Calculate(&dial_motor.pid_angle, shooter_controller.dial_target_rad, dial_motor.current_total_angle_rad);
-//            dial_motor.target_torque = PID_Calculate(&dial_motor.pid_speed, dial_motor.target_speed, dial_motor.feedback.velocity);
-//        }
-//    }
-		//速度控制
-	  if(shooter_controller.state != SHOOTER_OFF)
-    {
-        if(shooter_controller.state != SHOOTER_CALIBRATING && 
-            shooter_controller.state != SHOOTER_JAMMED)
-        {
-						//当前拨盘误差
-						float dial_error = shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad;
-						
-						float max_error = 2.2f * DIAL_ONE_SHOOT_ENCODER; 
-					
-						//如果误差离谱
-						if(fabs(dial_error) > max_error)
-						{
-								shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad;
-
-								shooter_controller.state = SHOOTER_READY; 
-								shooter_controller.single_shot_fired_flag = 0;
-								shooter_controller.continuous_fire_timer = 0;
-								shooter_controller.jam_detect_timer = 0;
-								shooter_controller.jam_timeout_timer = 0;
-								shooter_controller.jam_process_step = 0;
-						}
-				}
-			
-        //位置环
-        dial_motor.target_speed = PID_Calculate(&dial_motor.pid_angle, shooter_controller.dial_target_rad, dial_motor.current_total_angle_rad);
-
-        //校准校准
-        if(shooter_controller.state == SHOOTER_CALIBRATING && shooter_controller.homing_step == 0)
-        {
-            dial_motor.target_speed = DIAL_HOMING_SPEED; 
-        }
-				
-				//如果摩擦轮没转拨盘不转
-        if(shooter_controller.state != SHOOTER_CALIBRATING && 
-            shooter_controller.state != SHOOTER_JAMMED)
-        {
-            if(Check_Friction_Ready() == 0)
-            {
-                dial_motor.target_speed = 0.0f;
-            }
-				}
-    }
-    else
-    {
-			  dial_motor.target_speed = 0.0f;
-        dial_motor.target_torque = 0;
-    }
-    dial_motor.target_total_angle = shooter_controller.dial_target_rad;
-}
-
-
-
-
-//检测是否发射弹丸
-void Shooter_Check_Real_Fire(void) 
-{
-    static uint8_t is_spin_up_done = 0;
-
-	  //目标速度
-	  float target_rpm_outer = fabs(shooter_controller.friction_target_speed);
-		float target_rpm_inner = target_rpm_outer * (WHEEL_RADIUS_OUTER / WHEEL_RADIUS_INNER) * shooter_controller.friction_linear_ratio;
-
-    //关摩擦轮不检测
-    if(target_rpm_outer  < 1500.0f)
-    {
-        is_spin_up_done = 0;
-        return; 
-    }
-		
-    //计算平均速度
-    float s1_avg_speed = (ABS(friction_motor_inner_left.feedback.actual_speed) + 
-                          ABS(friction_motor_inner_right.feedback.actual_speed) + 
-                          ABS(friction_motor_inner_up.feedback.actual_speed)) / 3.0f;
-    
-    float s2_avg_speed = (ABS(friction_motor_outer_left.feedback.actual_speed) + 
-                          ABS(friction_motor_outer_right.feedback.actual_speed) + 
-                          ABS(friction_motor_outer_up.feedback.actual_speed)) / 3.0f;
-    
-
-    if(is_spin_up_done == 0)
-    {
-        if(fabs(target_rpm_outer - s1_avg_speed) < 500.0f)
-        {
-            is_spin_up_done = 1;//摩擦轮启动完成
-        }
-        else return;
-    }
-
-    //发射检测
-    uint8_t is_s1_drop = (target_rpm_inner - s1_avg_speed) > 200.0f;
-    uint8_t is_s2_drop = (target_rpm_outer - s2_avg_speed) > 50.0f;
-
-		//如果同时掉速
-    if(is_s2_drop)
-    {
-        current_shot_status = SHOT_DETECTED;
-    }
-}
-
-
-
-
-
-//热量模拟
-void Shooter_Update_Heat(void)
-{
-    uint32_t current_time = xTaskGetTickCount();
-    
-    static uint32_t last_time = 0;//上一次的时间
-    
-    if(last_time == 0) 
-    {
-        last_time = current_time;
-        return;
-    }
-    
-    uint32_t dt = current_time - last_time;
-    last_time = current_time;
-
-    if(dt == 0) return;
-		
-
-    float real_heat = (float)shooter_heat;//裁判系统给的当前真实热量
-		
-		float cooling_rate = 0.0f;
-		if(control_source == CONTROL_SOURCE_VTM) 
-		{
-			  cooling_rate = (float)shooter_cooling;
-		}
-		else
-		{
-				cooling_rate = 10000.0f;//(float)shooter_cooling;
-		}
-		
-    
-    //计算这段时间内的冷却量
-    float cooling_amount = cooling_rate * ((float)dt / 1000.0f);
-
-    if(shooter_predict_heat > 0.0f) shooter_predict_heat -= cooling_amount;
-    if(shooter_predict_heat < 0.0f) shooter_predict_heat = 0.0f;
-		
-    //同步校准
-    if(real_heat > shooter_predict_heat) 
-    {
-        shooter_predict_heat = real_heat;
-    }
-		
-		
-    if(shooter_controller.state != SHOOTER_SINGLE_SHOT && (current_time - last_shoot_time > 500))
-    {
-        if(shooter_predict_heat > real_heat + 30.0f)
-        {
-            shooter_predict_heat = real_heat - 15.0f;
-        }
-    }
-}
-
-
-
-
-//是否允许开火
-uint8_t Shooter_Check_Heat_Allowed(void)
-{
-	if(control_source == CONTROL_SOURCE_VTM) 
-	{
-		  return(shooter_predict_heat + HERO_HEAT_PER_SHOT <= (float)heat_limit);
-	}
-	else
-	{
-      return(shooter_predict_heat + HERO_HEAT_PER_SHOT < (float)10000.0f - HEAT_SAFETY_MARGIN);
-	}
-}
 
 
 
@@ -3202,7 +2145,7 @@ void Can_Decode_Task(void const *argument)
                 //拨盘电机反馈
                 else if(rx_msg.can_id == RX_DIAL_FDB_ID)
                 {
-                    update_dial_motor(rx_msg.data);
+                    Shooter_CAN_Feedback(rx_msg.can_id, rx_msg.data);
                 }
 								//双板通信
                 else if(rx_msg.can_id == RX_CHASSIS_DATA_ID) 
@@ -3215,7 +2158,7 @@ void Can_Decode_Task(void const *argument)
 							  //摩擦轮电机
                 if(rx_msg.can_id >= 0x201 && rx_msg.can_id <= 0x207)
                 {
-                    update_friction_motors(rx_msg.data, rx_msg.can_id);
+                    Shooter_CAN_Feedback(rx_msg.can_id, rx_msg.data);
                 }
             }
              else if(rx_msg.hfdcan->Instance == FDCAN3)
@@ -3276,8 +2219,8 @@ void Print_Entry_Task(void const * argument)
 	for(;;)
 	{
 		
-if(vofa_timer > 0) vofa_timer--;
-else print_initial_speed = 0.0f;
+Shooter_Debug_Tick();
+const Shooter_Debug_Data_t *shooter_dbg = Shooter_Get_Debug_Data();
 		
 		
 ////自瞄
@@ -3290,16 +2233,16 @@ else print_initial_speed = 0.0f;
 
 					            VOFA_Print_Wave(10,
 //吊射
-(float)initial_speed,  //弹速
-(float)bullet_speed_avg,     //平均弹速
-(float)bullet_speed_variance,//方差
-(float)bullet_speed_range, //极差
-(float)friction_motor_outer_left.feedback.actual_speed,
--(float)friction_motor_outer_right.feedback.actual_speed,
-(float)friction_motor_outer_up.feedback.actual_speed,
-(float)friction_motor_inner_left.feedback.actual_speed,
--(float)friction_motor_inner_right.feedback.actual_speed,
-(float)friction_motor_inner_up.feedback.actual_speed);
+(float)shooter_dbg->referee_bullet_speed,  //弹速
+(float)shooter_dbg->bullet_speed_avg,     //平均弹速
+(float)shooter_dbg->bullet_speed_variance,//方差
+(float)shooter_dbg->bullet_speed_range, //极差
+(float)shooter_dbg->friction_outer_left_speed,
+-(float)shooter_dbg->friction_outer_right_speed,
+(float)shooter_dbg->friction_outer_up_speed,
+(float)shooter_dbg->friction_inner_left_speed,
+-(float)shooter_dbg->friction_inner_right_speed,
+(float)shooter_dbg->friction_inner_up_speed);
 
 
 
@@ -3373,87 +2316,6 @@ void update_gimbal_pitch(const uint8_t* data)
 
 
 
-
-
-//更新拨盘电机
-void update_dial_motor(const uint8_t* data)
-{
-		dial_motor.id = (data[0])&0x0F;
-	  dial_motor.state = (data[0])>>4;
-	
-    uint16_t pos_int = (data[1] << 8) | data[2];
-    uint16_t vel_int = (data[3] << 4) | (data[4] >> 4);
-    uint16_t tor_int = ((data[4] & 0x0F) << 8) | data[5];
-
-    //获取当前单圈位置(rad, -12.5 ~ +12.5)
-    float current_pos_rad = uint_to_float(pos_int, -3.141593f, 3.141593f, 16);
-    
-	
-    //首次运行，初始化
-    if(dial_motor.last_feedback_position == 0.0f && dial_motor.round_count == 0)
-    {
-        dial_motor.last_feedback_position = current_pos_rad;
-    }
-
-    float pos_diff = current_pos_rad - dial_motor.last_feedback_position;
-
-    //过零处理
-    if(pos_diff > 3.14f)
-    {
-        dial_motor.round_count--;
-    }
-    else if (pos_diff < -3.14f)
-    {
-        dial_motor.round_count++;
-    }
-
-    //计算总角度
-    dial_motor.current_total_angle_rad = dial_motor.round_count * (6.283186f) + current_pos_rad;
-    dial_motor.current_total_angle_deg = dial_motor.current_total_angle_rad * RAD_TO_DEG;
-    
-    //更新
-    dial_motor.feedback.position = current_pos_rad;
-    dial_motor.feedback.velocity = uint_to_float(vel_int, -10, 10, 12);
-    dial_motor.feedback.torque   = uint_to_float(tor_int, DM4340_DIAL_T_MIN, DM4340_DIAL_T_MAX, 12);
-    dial_motor.last_feedback_position = current_pos_rad;
-		
-    dial_motor.last_update_tick = osKernelGetTickCount();
-}
-
-
-
-
-//更新摩擦轮电机
-void update_friction_motors(const uint8_t* data, uint32_t can_id)
-{
-    Motor_Controller* motor = NULL;
-
-    //根据ID匹配电机指针
-    switch(can_id - 0x200)
-    {
-        case FRICTION_INNER_LEFT_ID:  motor = &friction_motor_inner_left;  break;
-        case FRICTION_INNER_RIGHT_ID: motor = &friction_motor_inner_right; break;
-        case FRICTION_INNER_UP_ID:    motor = &friction_motor_inner_up;    break;
-        
-        case FRICTION_OUTER_LEFT_ID:  motor = &friction_motor_outer_left;  break;
-        case FRICTION_OUTER_RIGHT_ID: motor = &friction_motor_outer_right; break;
-        case FRICTION_OUTER_UP_ID:    motor = &friction_motor_outer_up;    break;
-        
-        default: return; // 未知ID
-    }
-
-    if(motor != NULL)
-    {
-        motor->feedback.angle = (uint16_t)(data[0] << 8) | data[1];
-        motor->feedback.actual_speed = (int16_t)((data[2] << 8) | data[3]);
-        motor->feedback.current = (int16_t)((data[4] << 8) | data[5]);
-        motor->feedback.temperature = data[6];
-        motor->last_update_tick = osKernelGetTickCount();
-    }
-}
-
-
-
 //底盘发给云台的数据包
 typedef union
 {
@@ -3482,10 +2344,7 @@ void update_chassis_data(const uint8_t *data)
     
     memcpy(rx_msg.data, data, 8);
 
-    initial_speed  = rx_msg.pack.bullet_speed;
-    shooter_heat  = rx_msg.pack.shooter_heat;
-    heat_limit    = rx_msg.pack.heat_limit;
-    shooter_cooling = rx_msg.pack.cooling_value;
+    Shooter_Set_Referee_Data(rx_msg.pack.shooter_heat, rx_msg.pack.heat_limit, rx_msg.pack.cooling_value, rx_msg.pack.bullet_speed);
     color        = rx_msg.pack.color;
     is_referee_online    = rx_msg.pack.ref_online;
 }

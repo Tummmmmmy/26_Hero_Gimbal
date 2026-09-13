@@ -2,19 +2,11 @@
 #include "cmsis_os.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "shooter_control.h"
 
 
 extern Motor_Controller gimbal_yaw_motor;
 extern Motor_Controller gimbal_pitch_motor;
-
-extern Motor_Controller dial_motor;
-
-extern Motor_Controller friction_motor_inner_left;
-extern Motor_Controller friction_motor_inner_right;
-extern Motor_Controller friction_motor_inner_up;
-extern Motor_Controller friction_motor_outer_left;
-extern Motor_Controller friction_motor_outer_right;
-extern Motor_Controller friction_motor_outer_up;
 
 
 
@@ -56,17 +48,7 @@ void Monitor_Task(void const * argument)
         Check_Motor_Online(&gimbal_pitch_motor, now, 200);
         
         //²¦ÅÌ
-        Check_Motor_Online(&dial_motor, now, 200);
-        
-        //Ò»¼¶Ä¦²ÁÂÖ
-        Check_Motor_Online(&friction_motor_inner_left, now, 200);
-        Check_Motor_Online(&friction_motor_inner_right, now, 200);
-        Check_Motor_Online(&friction_motor_inner_up, now, 200);
-        
-        //¶þ¼¶Ä¦²ÁÂÖ
-        Check_Motor_Online(&friction_motor_outer_left, now, 200);
-        Check_Motor_Online(&friction_motor_outer_right, now, 200);
-        Check_Motor_Online(&friction_motor_outer_up, now, 200);
+        Shooter_Check_Motors_Online(now);
 
         vTaskDelayUntil(&xLastWakeTime, TimeIncrement);
     }
