@@ -1131,6 +1131,11 @@
               <FilePath>..\Modules\shooter_control.c</FilePath>
             </File>
             <File>
+              <FileName>gimbal_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\gimbal_control.c</FilePath>
+            </File>
+            <File>
               <FileName>bridge.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\bridge.c</FilePath>
@@ -1154,6 +1159,11 @@
               <FileName>shooter_control.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Modules\shooter_control.h</FilePath>
+            </File>
+            <File>
+              <FileName>gimbal_control.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Modules\gimbal_control.h</FilePath>
             </File>
           </Files>
         </Group>
