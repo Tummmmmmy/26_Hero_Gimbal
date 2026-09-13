@@ -1,4 +1,5 @@
 #include "Control_Vision.h"
+#include "chassis_control.h"
 #include "usbd_cdc_if.h"
 #include "CRC.h"
 #include "cmsis_os.h"
@@ -27,7 +28,6 @@ extern float pitch, yaw, total_yaw;
 extern float gyro[3]; // gyro[0]=pitch_rate, gyro[2]=yaw_rate (rad/s)
 //extern float quat[4]; 
 extern float q0, q1, q2, q3;// 四元数 [w,x,y,z]
-extern uint8_t color;
 
 
 
@@ -167,8 +167,8 @@ void Vision_Send_Data(void)
 
 
     //颜色(color 0=蓝, 1=红)
-    if(color == 0) VisionTxData.color = 0;//打红方
-		else if(color == 1) VisionTxData.color = 1;//打蓝方
+    if(Chassis_Get_Color() == 0) VisionTxData.color = 0;//打红方
+		else if(Chassis_Get_Color() == 1) VisionTxData.color = 1;//打蓝方
 
     //计算CRC
      VisionTxData.crc16 = Get_CRC16_Check_Sum((uint8_t*)&VisionTxData, sizeof(Vision_Send_t) - 2, 0xFFFF);

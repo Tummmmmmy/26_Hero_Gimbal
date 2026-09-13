@@ -5,6 +5,9 @@
 #include <stdbool.h>
 
 
+//遥控杆量到归一化[-1,1]的缩放系数(杆量范围约+-660)
+#define RC_TO_ONE (1.0f / 660.0f)
+
 //统一的遥控器数据结构体
 typedef struct {
 
