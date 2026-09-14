@@ -1,6 +1,8 @@
 #ifndef VISION_CAN_H
 #define VISION_CAN_H
 
+// [废弃] 历史 CAN 视觉实现: 已确认不再使用, 不纳入主架构, 不参与编译, 保留仅供参考
+
 #include "main.h"
 
 

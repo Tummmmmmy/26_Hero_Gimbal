@@ -30,34 +30,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
-#include <stdlib.h>
-#include <math.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include "arm_math.h"
-
-#include "bsp_buzzer.h"
-#include "INS_task.h"
-#include "bsp_DR16.h"
 #include "bsp_VT03.h"
-#include "remote_control.h"
-#include "bsp_ano_protocol.h"
-
-#include "Control_Vision.h"
-#include "vision_can.h"
-#include "smc.h"
-#include "Ramp.h"
 #include "bsp_dwt.h"
 #include "Servo_control.h"
-#include "pid_controller.h"
-#include "robot_mode.h"
-#include "shooter_control.h"
-#include "gimbal_control.h"
-#include "chassis_control.h"
-#include "bsp_can.h"
-#include "can_transmit.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -79,9 +54,6 @@
 
 /* USER CODE BEGIN PV */
 
-//CAN接收解码任务
-void Can_Decode_Task(void const *argument);
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -94,61 +66,7 @@ void MX_FREERTOS_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#define RX_DIAL_FDB_ID    0x302
-//CAN接收解码任务
-void Can_Decode_Task(void const *argument)
-{
-    CAN_Rx_Message_t rx_msg;
-
-    for(;;)
-    {
-        if(osMessageQueueGet(canRxQueueHandle, &rx_msg, NULL, osWaitForever) == osOK)
-        {
-            if(rx_msg.hfdcan->Instance == FDCAN1)
-            {
-								//云台Yaw电机反馈
-								if(rx_msg.can_id == LK_YAW_ID)
-                {
-                    Gimbal_Update_Yaw(rx_msg.data);
-                }
-                //拨盘电机反馈
-                else if(rx_msg.can_id == RX_DIAL_FDB_ID)
-                {
-                    Shooter_CAN_Feedback(rx_msg.can_id, rx_msg.data);
-                }
-								//双板通信
-                else if(rx_msg.can_id == RX_CHASSIS_DATA_ID) 
-                {
-									  Chassis_Decode_Feedback(rx_msg.data);
-                }
-            }
-            else if(rx_msg.hfdcan->Instance == FDCAN2) 
-            {
-							  //摩擦轮电机
-                if(rx_msg.can_id >= 0x201 && rx_msg.can_id <= 0x207)
-                {
-                    Shooter_CAN_Feedback(rx_msg.can_id, rx_msg.data);
-                }
-            }
-             else if(rx_msg.hfdcan->Instance == FDCAN3)
-            {
-                //云台Pitch电机反馈
-                if(rx_msg.can_id == (0x200 + GIMBAL_PITCH_MOTOR_ID))
-                {
-                    Gimbal_Update_Pitch(rx_msg.data);
-                }
-//						   	//自瞄
-//							  else if (rx_msg.can_id == VISION_RX_CAN_ID)
-//                {
-//                    Vision_CAN_Decode(rx_msg.can_id, rx_msg.data);
-//                }
-            }
-        }
-    }
-}
-
-//控制任务
-/* USER CODE END 0 */
+/* USER CODE END 0 *//* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.

@@ -1,7 +1,6 @@
 #include "vision_task.h"
 #include "Control_Vision.h"
 #include "cmsis_os.h"
-#include "vision_can.h"
 #include "INS_task.h"
 
 

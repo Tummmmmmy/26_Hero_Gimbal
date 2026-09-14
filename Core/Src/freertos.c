@@ -39,6 +39,7 @@
 #include "robot_control.h"
 #include "control_task.h"
 #include "print_task.h"
+#include "can_task.h"
 
 
 //#include "math.h"
@@ -187,7 +188,6 @@ const osSemaphoreAttr_t anoTxSem_attributes = {
 
 void All_Init_Run(void *argument);
 extern void IMU_task(void const *argument);
-extern void Can_Decode_Task(void *argument);
 extern void vision_task(void *argument);
 extern void Print_Task(void *argument);
 void Device_Task(void *argument);
@@ -253,7 +253,7 @@ void MX_FREERTOS_Init(void) {
   Gimbal_TaskHandle = osThreadNew((osThreadFunc_t)Gimbal_Control_task, NULL, &Gimbal_Task_attributes);
 
   /* creation of CanDecodeTask */
-  CanDecodeTaskHandle = osThreadNew(Can_Decode_Task, NULL, &CanDecodeTask_attributes);
+  CanDecodeTaskHandle = osThreadNew((osThreadFunc_t)Can_Decode_Task, NULL, &CanDecodeTask_attributes);
 
   /* creation of VisionTask */
   VisionTaskHandle = osThreadNew(vision_task, NULL, &VisionTask_attributes);

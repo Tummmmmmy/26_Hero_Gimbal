@@ -518,7 +518,7 @@ switch(robot_mode)
 							    is_base_hitting_now = 1;
 
 								  vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
-						 		vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
+						 		  vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
 
 							    if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
 								{
@@ -692,7 +692,7 @@ switch(robot_mode)
 
 				case ROBOT_MODE_M_AIMING:
 				{
-						 if(Vision_IsOnline() && VisionData.is_tracking == 1)
+						  if(Vision_IsOnline() && VisionData.is_tracking == 1)
               {
 								  vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
 									vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;

@@ -6,7 +6,7 @@
 - 系统：FreeRTOS（CMSIS-RTOS v2）+ STM32Cube HAL
 - 通信：FDCAN1 / FDCAN2 / FDCAN3
 - 遥控：DR16（主用）、VT03（备用）
-- 状态：比赛验证版，正在做“能跑、能讲、能传承”的结构整理（行为保持不变）
+- 状态：比赛验证版，已完成“能跑、能讲、能传承”的模块化整理（行为保持不变）
 
 ## 主要功能
 - 云台控制：Yaw（LK 电机力矩控制）、Pitch（DJI 电机）；支持 IMU 闭环（SMC）与编码器闭环（PID）两套模式
@@ -20,8 +20,8 @@
 - `Algorithm/`：PID（IMU 专用）、SMC、Ramp、Mahony、EKF、Kalman、滤波等算法
 - `BSP/`：DR16、VT03、ANO 协议、DWT、蜂鸣器等板级驱动
 - `Devices/`：BMI088 IMU、WS2812 等器件驱动
-- `Task/`：IMU、device、vision、video、monitor 等 FreeRTOS 任务
-- `Modules/`：通信协议、视觉控制、舵机、bridge 等模块
+- `Task/`：控制(control_task)、CAN接收(can_task)、打印(print_task)、IMU、device、vision、video、monitor 等 FreeRTOS 任务
+- `Modules/`：机器人调度(robot_control)、模式(robot_mode)、云台(gimbal_control)、底盘(chassis_control)、射击(shooter_control)、CAN收发(can_transmit/can_receive)、视觉、舵机、bridge 等模块
 - `Drivers/ Middlewares/`：ST HAL、CMSIS、FreeRTOS、USB 库
 
 ## 编译与烧录
@@ -60,5 +60,5 @@
 - 上电/测试时注意摩擦轮、拨盘等运动部件
 
 ## 历史 / 废弃说明
-- `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，未纳入主架构（保留待清理）
+- `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，已确认不再使用，不纳入主架构，已移出 Keil 工程编译（文件保留）
 - `Algorithm/pid.c/.h`：`INS_task`（IMU）依赖的 PID，不是云台主控制 PID

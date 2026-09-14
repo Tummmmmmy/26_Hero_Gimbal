@@ -4,6 +4,8 @@
 
 ## 1. 现状（重构前）
 
+> 注：整体重构已完成（2026-09），本节保留重构前的状态描述。
+
 当前应用层逻辑高度集中在 `Core/Src/main.c`（约 4363 行），其中 `Robot_Control_Loop()`（约 1475 行）同时承担了：
 
 - 遥控解析与模式映射（DR16 / VT03）
@@ -99,25 +101,42 @@ Control_Vision       ──VisionData─┤
 
 ## 5. 历史 / 废弃代码
 
-- `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，标记为废弃，不纳入主架构。
+- `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，已确认无调用，不纳入主架构，已移出 Keil 工程编译（文件保留）。
 - `Algorithm/pid.c/.h`：哈工程 IMU 代码移植来的 PID，仅供 `INS_task` 使用；与云台主 PID（`PID_Controller`）不同，不要混淆。
-- `Bullet_Speed_Adaptive_Control()`：若确认无调用则删除，弹速统计函数保留。
+- `Bullet_Speed_Adaptive_Control()`：已确认有调用（`shooter_control.c` 内部），保留；弹速统计函数保留。
 
 ## 6. 重构节奏
 
 每步以“Keil 0 Error → 烧录 → 实车/上电验证 → git commit”为门槛，不一次性大改：
 
-1. 基线、README、架构文档（本步）
-2. 只搬归属明确的类型/枚举
-3. `BSP/bsp_can`（初始化 + 发送原语 + RX 中断）
-4. `Modules/can_transmit`（协议发送）
-5. `Modules/shooter_control`
-6. `Modules/gimbal_control`（含瞄准）
-7. `Modules/chassis_control`（含上坎）
-8. `Modules/robot_mode` + `Modules/robot_control` + 任务归位
-9. `Modules/can_receive` + `Task/can_task`、死代码清理、收尾文档
+1. 基线、README、架构文档（本步） ✅
+2. 只搬归属明确的类型/枚举 ✅
+3. `BSP/bsp_can`（初始化 + 发送原语 + RX 中断） ✅
+4. `Modules/can_transmit`（协议发送） ✅
+5. `Modules/shooter_control` ✅
+6. `Modules/gimbal_control`（含瞄准） ✅
+7. `Modules/chassis_control`（含上坎） ✅
+8. `Modules/robot_mode` + `Modules/robot_control` + 任务归位 ✅
+9. `Modules/can_receive` + `Task/can_task`、死代码清理、收尾文档 ✅
 
 ## 7. 编码约定
 
 - 源码（`.c/.h`）保持 GBK，不随重构转换编码。
 - 文档（`.md`）为 UTF-8。
+
+## 8. 完成状态（2026-09）
+
+重构完成后的最终调用链：
+
+```text
+Robot_Control_Loop (Modules/robot_control.c, 1ms 调度)
+    ├─ Robot_Mode_Update      Modules/robot_mode.c         模式选择
+    ├─ Gimbal_Control_*       Modules/gimbal_control.c     云台/瞄准
+    ├─ Chassis_Control_*      Modules/chassis_control.c    底盘/上坎
+    ├─ Shooter_Control_*      Modules/shooter_control.c    射击
+    └─ 统一 CAN 输出          Modules/can_transmit.c → BSP/bsp_can.c
+
+接收: FDCAN 中断 → BSP/bsp_can.c → Task/can_task.c → Modules/can_receive.c → 各模块解码
+```
+
+`main.c` 仅保留 HAL 初始化与系统入口。
