@@ -36,6 +36,9 @@
 #include "bsp_dwt.h"
 #include "Servo_control.h"
 #include "bsp_can.h"
+#include "robot_control.h"
+#include "control_task.h"
+#include "print_task.h"
 
 
 //#include "math.h"
@@ -184,12 +187,10 @@ const osSemaphoreAttr_t anoTxSem_attributes = {
 
 void All_Init_Run(void *argument);
 extern void IMU_task(void const *argument);
-extern void Gimbal_Control_task(void *argument);
 extern void Can_Decode_Task(void *argument);
 extern void vision_task(void *argument);
 extern void Print_Task(void *argument);
 void Device_Task(void *argument);
-extern void Print_Entry_Task(void *argument);
 extern void Video_Bridge_Task(void *argument);
 extern void Monitor_Task(void *argument);
 
@@ -249,7 +250,7 @@ void MX_FREERTOS_Init(void) {
   INSTaskHandle = osThreadNew((osThreadFunc_t)IMU_task, NULL, &INSTask_attributes);
 
   /* creation of Gimbal_Task */
-  Gimbal_TaskHandle = osThreadNew(Gimbal_Control_task, NULL, &Gimbal_Task_attributes);
+  Gimbal_TaskHandle = osThreadNew((osThreadFunc_t)Gimbal_Control_task, NULL, &Gimbal_Task_attributes);
 
   /* creation of CanDecodeTask */
   CanDecodeTaskHandle = osThreadNew(Can_Decode_Task, NULL, &CanDecodeTask_attributes);
@@ -264,7 +265,7 @@ void MX_FREERTOS_Init(void) {
   DeviceTaskHandle = osThreadNew(Device_Task, NULL, &DeviceTask_attributes);
 
   /* creation of PrintEntryTask */
-  PrintEntryTaskHandle = osThreadNew(Print_Entry_Task, NULL, &PrintEntryTask_attributes);
+  PrintEntryTaskHandle = osThreadNew((osThreadFunc_t)Print_Entry_Task, NULL, &PrintEntryTask_attributes);
 
   /* creation of VideoBridgeTask */
   VideoBridgeTaskHandle = osThreadNew(Video_Bridge_Task, NULL, &VideoBridgeTask_attributes);

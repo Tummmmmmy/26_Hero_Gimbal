@@ -1141,6 +1141,16 @@
               <FilePath>..\Modules\chassis_control.c</FilePath>
             </File>
             <File>
+              <FileName>robot_mode.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\robot_mode.c</FilePath>
+            </File>
+            <File>
+              <FileName>robot_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\robot_control.c</FilePath>
+            </File>
+            <File>
               <FileName>bridge.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\bridge.c</FilePath>
@@ -1174,6 +1184,11 @@
               <FileName>chassis_control.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Modules\chassis_control.h</FilePath>
+            </File>
+            <File>
+              <FileName>robot_control.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Modules\robot_control.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -1224,6 +1239,26 @@
               <FileName>monitor_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Task\monitor_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Task\control_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>print_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Task\print_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>control_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Task\control_task.h</FilePath>
+            </File>
+            <File>
+              <FileName>print_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Task\print_task.h</FilePath>
             </File>
           </Files>
         </Group>

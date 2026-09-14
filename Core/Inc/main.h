@@ -38,7 +38,6 @@ extern "C" {
 #include <stdbool.h>
 extern osMessageQueueId_t canRxQueueHandle;
 
-
 #define TRUE  true
 #define FALSE false
 #define PI 3.14159265358979f
@@ -50,7 +49,6 @@ typedef struct
     uint32_t can_id;
     uint8_t data[8];
 } CAN_Rx_Message_t;
-
 
 //电机反馈结构体
 typedef struct
@@ -64,8 +62,6 @@ typedef struct
     float velocity;//速度(rad/s)
     float torque;  //力矩(Nm)
 } Motor_Feedback;
-
-
 
 //电机控制结构体
 typedef struct
@@ -100,8 +96,6 @@ typedef struct
     bool is_online;             //在线状态标志位
 } Motor_Controller;
 
-
-
 //机器人LED状态枚举
 typedef enum {
     LED_STATE_BOOTING,        //启动中 (紫色)
@@ -112,15 +106,6 @@ typedef enum {
 	  LED_STATE_BASE_HIT_READY,
 	  LED_STATE_RESET
 } LED_State_e;
-
-extern volatile LED_State_e led_state;
-
-
-
-//初始化
-extern void Robot_Param_Init(void);
-
-
 
 /* USER CODE END Includes */
 

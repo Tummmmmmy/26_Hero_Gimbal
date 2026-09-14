@@ -1,4 +1,5 @@
 #include "device_task.h"
+#include "robot_control.h"
 #include "ws2812.h"
 #include "cmsis_os2.h"
 
@@ -10,7 +11,7 @@ void Device_task(void)
 	
 	while(1)
 	{	
-			switch(led_state)
+			switch(Robot_Get_Led_State())
 			{
 					case LED_STATE_BOOTING:
 //						WS2812_Set_Colour(255, 255, 0); //»ÆÉ«
