@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32H723xx,ARM_MATH_CM7,__FPU_PRESENT=1U,__CC_ARM,ARM_MATH_MATRIX_CHECK,ARM_MATH_ROUNDING</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../BSP;../Control;../Algorithm;../Modules;../Devices;../Task;../Motor;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../USB_DEVICE/App;../USB_DEVICE/Target;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc;../Drivers/STM32H7xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H7xx/Include;../Drivers/CMSIS/Include;../BSP;../Algorithm;../Modules;../Modules/video_bridge;../Devices;../Task;../Middlewares/Third_Party/FreeRTOS/Source/include;../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F;../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2;../USB_DEVICE/App;../USB_DEVICE/Target;../Middlewares/ST/STM32_USB_Device_Library/Core/Inc;../Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -1063,11 +1063,6 @@
               <FilePath>..\Algorithm\pid.c</FilePath>
             </File>
             <File>
-              <FileName>pid_controller.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Algorithm\pid_controller.c</FilePath>
-            </File>
-            <File>
               <FileName>smc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Algorithm\smc.c</FilePath>
@@ -1095,35 +1090,17 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>Control</GroupName>
-        </Group>
-        <Group>
-          <GroupName>Modules</GroupName>
+          <GroupName>Modules/Control</GroupName>
           <Files>
             <File>
-              <FileName>Control_Vision.c</FileName>
+              <FileName>robot_control.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\Control_Vision.c</FilePath>
+              <FilePath>..\Modules\robot_control.c</FilePath>
             </File>
             <File>
-              <FileName>remote_control.c</FileName>
+              <FileName>robot_mode.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\remote_control.c</FilePath>
-            </File>
-            <File>
-              <FileName>Servo_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\Servo_control.c</FilePath>
-            </File>
-            <File>
-              <FileName>can_transmit.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\can_transmit.c</FilePath>
-            </File>
-            <File>
-              <FileName>shooter_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\shooter_control.c</FilePath>
+              <FilePath>..\Modules\robot_mode.c</FilePath>
             </File>
             <File>
               <FileName>gimbal_control.c</FileName>
@@ -1136,64 +1113,64 @@
               <FilePath>..\Modules\chassis_control.c</FilePath>
             </File>
             <File>
-              <FileName>robot_mode.c</FileName>
+              <FileName>shooter_control.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\robot_mode.c</FilePath>
+              <FilePath>..\Modules\shooter_control.c</FilePath>
             </File>
-            <File>
-              <FileName>robot_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\robot_control.c</FilePath>
-            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Modules/Comm</GroupName>
+          <Files>
             <File>
               <FileName>can_receive.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\can_receive.c</FilePath>
             </File>
             <File>
-              <FileName>bridge.c</FileName>
+              <FileName>can_transmit.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\bridge.c</FilePath>
+              <FilePath>..\Modules\can_transmit.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Modules/Input</GroupName>
+          <Files>
+            <File>
+              <FileName>remote_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\remote_control.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Modules/Vision</GroupName>
+          <Files>
+            <File>
+              <FileName>vision_link.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\vision_link.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Modules/VideoBridge</GroupName>
+          <Files>
+            <File>
+              <FileName>video_bridge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\video_bridge\video_bridge.c</FilePath>
             </File>
             <File>
-              <FileName>bridge_platform.c</FileName>
+              <FileName>video_bridge_platform.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\bridge_platform.c</FilePath>
+              <FilePath>..\Modules\video_bridge\video_bridge_platform.c</FilePath>
             </File>
             <File>
               <FileName>hero_protocol.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\Modules\hero_protocol.h</FilePath>
-            </File>
-            <File>
-              <FileName>robot_mode.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\robot_mode.h</FilePath>
-            </File>
-            <File>
-              <FileName>shooter_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\shooter_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>gimbal_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\gimbal_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>chassis_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\chassis_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>robot_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\robot_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>can_receive.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Modules\can_receive.h</FilePath>
+              <FilePath>..\Modules\video_bridge\hero_protocol.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -1214,6 +1191,11 @@
               <FileName>ws2812.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Devices\ws2812.c</FilePath>
+            </File>
+            <File>
+              <FileName>servo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Devices\servo.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1256,24 +1238,9 @@
               <FilePath>..\Task\print_task.c</FilePath>
             </File>
             <File>
-              <FileName>control_task.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Task\control_task.h</FilePath>
-            </File>
-            <File>
-              <FileName>print_task.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Task\print_task.h</FilePath>
-            </File>
-            <File>
               <FileName>can_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Task\can_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>can_task.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Task\can_task.h</FilePath>
             </File>
           </Files>
         </Group>

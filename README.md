@@ -10,18 +10,18 @@
 
 ## 主要功能
 - 云台控制：Yaw（LK 电机力矩控制）、Pitch（DJI 电机）；支持 IMU 闭环（SMC）与编码器闭环（PID）两套模式
-- 瞄准：手操、自瞄、吊射、基地打击，与视觉（Control_Vision）协同
+- 瞄准：手操、自瞄、吊射、基地打击，与视觉（vision_link）协同
 - 射击：拨盘（DM 电机）+ 摩擦轮（DJI 电机），含卡弹检测/回弹、弹速统计
 - 底盘指令转发：速度、模式、超级电容、爬坡、LED、基地锁定
 - 安全：IMU 未就绪强制停机、遥控断连自动失能、长按/按键复位
 
 ## 目录结构
 - `Core/`：HAL 外设初始化、`main.c`、FreeRTOS 配置
-- `Algorithm/`：PID（IMU 专用）、SMC、Ramp、Mahony、EKF、Kalman、滤波等算法
+- `Algorithm/`：PID（全项目统一一套）、SMC、Ramp、Mahony、EKF、Kalman、滤波等算法
 - `BSP/`：DR16、VT03、ANO 协议、DWT、蜂鸣器等板级驱动
-- `Devices/`：BMI088 IMU、WS2812 等器件驱动
+- `Devices/`：BMI088 IMU、WS2812、舵机(servo) 等器件驱动
 - `Task/`：控制(control_task)、CAN接收(can_task)、打印(print_task)、IMU、device、vision、video、monitor 等 FreeRTOS 任务
-- `Modules/`：机器人调度(robot_control)、模式(robot_mode)、云台(gimbal_control)、底盘(chassis_control)、射击(shooter_control)、CAN收发(can_transmit/can_receive)、视觉、舵机、bridge 等模块
+- `Modules/`：机器人调度(robot_control)、模式(robot_mode)、云台(gimbal_control)、底盘(chassis_control)、射击(shooter_control)、CAN收发(can_transmit/can_receive)、视觉(vision_link)、图传链路(video_bridge) 等模块
 - `Drivers/ Middlewares/`：ST HAL、CMSIS、FreeRTOS、USB 库
 
 ## 编译与烧录
@@ -61,4 +61,4 @@
 
 ## 历史 / 废弃说明
 - `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，已确认不再使用，不纳入主架构，已移出 Keil 工程编译（文件保留）
-- `Algorithm/pid.c/.h`：`INS_task`（IMU）依赖的 PID，不是云台主控制 PID
+- `Algorithm/pid.c/.h`：全项目统一 PID（云台/底盘/射击/IMU 温控共用；旧哈工程移植 PID 已合并移除）

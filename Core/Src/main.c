@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include "bsp_VT03.h"
 #include "bsp_dwt.h"
-#include "Servo_control.h"
+#include "servo.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,7 +66,7 @@ void MX_FREERTOS_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* USER CODE END 0 *//* USER CODE END 0 */
+/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.

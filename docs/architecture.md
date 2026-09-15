@@ -1,6 +1,6 @@
 # 云台板电控架构说明
 
-> 本文件描述 `26_Hero_Gimbal` 的代码结构与重构目标。当前为“比赛验证版”，正在逐步整理。
+> 本文件描述 `26_Hero_Gimbal` 的代码结构与本次工程化重构的结果（“比赛验证版”，已完成实车验证）。
 
 ## 1. 现状（重构前）
 
@@ -28,7 +28,7 @@ Robot_Control_Loop()                     ← 总调度器（Modules/robot_contro
     ├─ 就绪检查 / 安全停机 / 复位
     ├─ Robot_Mode_Update()               ← 模式状态机（Modules/robot_mode.c）
     ├─ Gimbal_Control_Update()           ← 云台 + 瞄准（Modules/gimbal_control.c）
-    ├─ Chassis_Control_Update()          ← 底盘 + 上坎（Modules/chassis_control.c）
+    ├─ Chassis_Update_*()                ← 底盘 + 上坎（Modules/chassis_control.c）
     ├─ Shooter_Control_Update()          ← 射击（Modules/shooter_control.c）
     └─ 统一输出
 ```
@@ -73,16 +73,16 @@ Task/
 ```text
 bsp_DR16 / bsp_VT03 ──RC_Data_t──┐
 INS_task             ──IMU_Data_t─┤
-Control_Vision       ──VisionData─┤
+vision_link          ──VisionData─┤
                                   ▼
                         Robot_Control_Loop()
-                          ├─ 就绪? 否则 ForceStop
-                          ├─ Robot_Mode_Update()
-                          ├─ Robot_Reset_Update()
-                          ├─ Gimbal_Control_Update()   → yaw/pitch target_current
-                          ├─ Chassis_Control_Update()  → Chassis_Output_t
-                          ├─ Shooter_Control_Update()  → dial/friction 目标
-                          └─ Robot_Send_Outputs()      → can_transmit → FDCAN
+                          ├─ 就绪检查(未就绪则零发并返回)
+                          ├─ Robot_Mode_Update() + 复位(滚轮长按 / V键)
+                          ├─ 按模式翻译指令(Gimbal/Chassis/Shooter 目标写入)
+                          ├─ Gimbal_Control_Update()   → Gimbal_Output_t
+                          ├─ Chassis_Update_*()        → Chassis_Output_t
+                          ├─ Shooter_Control_Update()  → Shooter_Output_t
+                          └─ 统一CAN输出(内联, can_transmit) → BSP/bsp_can → FDCAN
 ```
 
 ## 4. 状态归属（目标）
@@ -90,7 +90,7 @@ Control_Vision       ──VisionData─┤
 | 当前位置 | 目标归属 |
 |---|---|
 | `Robot_Mode_e / Gimbal_Mode_e / Climb_Mode_e / Battle_Mode_e` | `Modules/robot_mode.h` |
-| `PID_Controller` + `PID_Init / PID_Calculate / PID_Calculate_Pit / PID_Cal_Enhanced / PID_Cal_Increment` | `Algorithm/pid_controller.h/.c`（自己的 PID） |
+| `PID_Controller` + `PID_Init / PID_Calculate / PID_Cal_Enhanced / PID_Cal_Increment` | `Algorithm/pid.h/.c`（全项目统一 PID） |
 | `IMU_Data_t` | `Task/INS_task.h` |
 | `Shooter_Controller_t` | `Modules/shooter_control.h` |
 | `gimbal_yaw/pitch_motor、SMC、rc_target_*、vision_target_*` | `Modules/gimbal_control.c`（static） |
@@ -102,7 +102,7 @@ Control_Vision       ──VisionData─┤
 ## 5. 历史 / 废弃代码
 
 - `Modules/Vision_can.c/.h`：历史 CAN 视觉实现，已确认无调用，不纳入主架构，已移出 Keil 工程编译（文件保留）。
-- `Algorithm/pid.c/.h`：哈工程 IMU 代码移植来的 PID，仅供 `INS_task` 使用；与云台主 PID（`PID_Controller`）不同，不要混淆。
+- 哈工程遗留 PID（原 `Algorithm/pid.c/.h`）：已于 2026-09 合并进统一 `Algorithm/pid.h/.c`；`INS_task` 温度 PID 改用同一实现，参数/计算逻辑/限幅/调用周期不变。
 - `Bullet_Speed_Adaptive_Control()`：已确认有调用（`shooter_control.c` 内部），保留；弹速统计函数保留。
 
 ## 6. 重构节奏
@@ -118,6 +118,9 @@ Control_Vision       ──VisionData─┤
 7. `Modules/chassis_control`（含上坎） ✅
 8. `Modules/robot_mode` + `Modules/robot_control` + 任务归位 ✅
 9. `Modules/can_receive` + `Task/can_task`、死代码清理、收尾文档 ✅
+10. 收尾清理: 视觉目标解析去重、AIMING/M_AIMING 公共主体提取、V键复位去重、死代码清理、文档修正 ✅
+11. 目录/命名整理: Servo_control→Devices/servo、Control_Vision→vision_link、bridge 子系统→Modules/video_bridge/、清理空 Control 目录与无效包含路径 ✅
+12. PID 合并 + 命名规范: 两套 PID 统一为 Algorithm/pid.h/.c（保留自有实现，IMU 温度 PID 行为不变）；video_bridge 文件更名为 video_bridge.c/video_bridge_platform.c ✅
 
 ## 7. 编码约定
 

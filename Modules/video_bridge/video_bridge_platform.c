@@ -1,7 +1,7 @@
-#include "bridge_platform.h"
+#include "video_bridge_platform.h"
 #include "usart.h"
 #include "cmsis_os2.h"
-#include "bridge.h"
+#include "video_bridge.h"
 #include "CRC.h"
 #include <string.h>
 

@@ -22,11 +22,11 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-#include "Control_Vision.h"
+#include "vision_link.h"
 
 
 extern void USB_Feed_Video_Data(uint8_t *buf, uint32_t len);
-#include "bridge_platform.h"
+#include "video_bridge_platform.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/

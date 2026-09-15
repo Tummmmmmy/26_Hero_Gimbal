@@ -7,7 +7,7 @@
 
 #include "main.h"
 #include "cmsis_os.h"
-#include "pid_controller.h"
+#include "pid.h"
 #include "shooter_control.h"
 #include <math.h>
 #include <string.h>
@@ -334,14 +334,12 @@ static void Bullet_Speed_Adaptive_Control(float latest_speed)
 
 
 
-static uint32_t last_bullet_update_tick = 0;
 static void Bullet_Speed_Adaptive_Process(void)
 {
     if(initial_speed != last_referee_speed && initial_speed > 11.0f && initial_speed < 17.0f)
     {
 			 shoot_seq_cnt++;
 			
-			 last_bullet_update_tick = osKernelGetTickCount(); 
 			
         if(shoot_seq_cnt > 2) 
         {

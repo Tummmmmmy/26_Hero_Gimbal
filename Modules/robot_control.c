@@ -16,8 +16,8 @@
 #include "remote_control.h"
 #include "INS_task.h"
 #include "bsp_DR16.h"
-#include "Control_Vision.h"
-#include "Servo_control.h"
+#include "vision_link.h"
+#include "servo.h"
 #include "tim.h"
 #include "fdcan.h"
 #include "can_transmit.h"
@@ -39,22 +39,10 @@ static uint32_t s_reset_trigger_timer = 0;
 // 射击摩擦轮档位(F/G 键切换) 0:关, 1:12m/s, 2:16m/s
 static uint8_t s_fric_level = 0;
 
-//==================== 瞄准/视觉中间状态 ====================
+//==================== 瞄准状态 ====================
 
 // 是否处于瞄准中(自瞄或手动自瞄)
 static uint8_t is_aiming_now = 0;
-
-// 视觉目标角度中间量
-static float vision_yaw_deg = 0.0f;
-static float vision_pitch_deg = 0.0f;
-static float vision_target_yaw_angle = 0.0f;
-static float vision_target_pitch_angle = 0.0f;
-
-// 基地打击
-static float vision_base_yaw_deg = 0.0f;
-static float vision_base_pitch_deg = 0.0f;
-
-static float vision_target_base_pitch_angle = 0.0f;
 
 //==================== 控制参数 ====================
 
@@ -108,6 +96,72 @@ void Robot_Param_Init(void)
 LED_State_e Robot_Get_Led_State(void)
 {
     return s_led_state;
+}
+
+//==================== 内部辅助函数 ====================
+
+// V键复位: Yaw归零到180度并复位SMC(失能与战斗模式下均可触发)
+static void Robot_Reset_Yaw_To_180(void)
+{
+    s_led_state = LED_STATE_RESET;
+
+    LK_Send_Torque(&hfdcan1, 0);
+    DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
+
+    Reset_All_IMU_Yaw_Only();
+
+    Gimbal_Set_World_Yaw(180.0f);
+
+    Gimbal_Reset_Yaw_SMC();
+}
+
+// 视觉目标解析: 弧度转角度, +180坐标系偏移, 按IMU yaw取最短路径;
+// 与当前世界目标偏差在 gate_deg 内才写入, 返回1=已写入
+static uint8_t Resolve_Vision_Aim_Target(const IMU_Data_t* imu_data, float gate_deg)
+{
+    float vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
+    float vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;
+
+    float vision_target_yaw_angle = 180.0f + vision_yaw_deg;
+    float vision_target_pitch_angle = 180.0f + vision_pitch_deg;
+
+    //最短路径
+    while(vision_target_yaw_angle - imu_data->yaw_angle > 180.0f)  vision_target_yaw_angle -= 360.0f;
+    while(vision_target_yaw_angle - imu_data->yaw_angle < -180.0f) vision_target_yaw_angle += 360.0f;
+
+    if(fabs(vision_target_yaw_angle - Gimbal_Get_World_Yaw()) < gate_deg && fabs(vision_target_pitch_angle - Gimbal_Get_World_Pitch()) < gate_deg)
+    {
+        Gimbal_Set_World_Target(vision_target_yaw_angle, vision_target_pitch_angle);
+        return 1;
+    }
+
+    return 0;
+}
+
+// 自瞄/手动自瞄公共主体: 视觉跟踪或右杆跟随 + Pitch限位 + 底盘移动(风格由参数决定)
+static void Handle_Aiming_Mode(const RC_Data_t* rc, const IMU_Data_t* imu_data, float yaw_encoder_diff, Chassis_Move_Style_e move_style)
+{
+    if(Vision_IsOnline() && VisionData.is_tracking == 1)
+    {
+        Resolve_Vision_Aim_Target(imu_data, 60.0f);
+    }
+    else
+    {
+        //更新目标角度
+        float yaw_angle_increment = -(float)rc->rc.right_x * RC_TO_ONE * ky_follow ;
+        float pitch_angle_increment = -(float)rc->rc.right_y * RC_TO_ONE * kpit_follow;
+
+        Gimbal_Add_World_Target(yaw_angle_increment, pitch_angle_increment);
+
+        VisionData.target_yaw_rad = 0.0f;
+        VisionData.target_pitch_rad = 0.0f;
+    }
+
+    //Pitch限位
+    Gimbal_Clamp_World_Pitch(135.5f, 194.1f);
+
+    //底盘(坐标变换, 具体风格由调用方决定)
+    Chassis_Update_Move(rc, yaw_encoder_diff, move_style);
 }
 
 void Robot_Control_Loop(const IMU_Data_t* imu_data)
@@ -173,16 +227,7 @@ static bool key_V_last_state = false;
         }
 				else if(rc->key.map.V && !key_V_last_state)
 				{			
-						s_led_state = LED_STATE_RESET;
-					
-						LK_Send_Torque(&hfdcan1, 0);
-						DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
-
-						Reset_All_IMU_Yaw_Only();
-					
-						Gimbal_Set_World_Yaw(180.0f);
-
-						Gimbal_Reset_Yaw_SMC();
+						Robot_Reset_Yaw_To_180();
 				}
         else
         {
@@ -196,16 +241,7 @@ static bool key_V_last_state = false;
     {
 				if(rc->key.map.V && !key_V_last_state)
 				{
-						s_led_state = LED_STATE_RESET;
-					
-						LK_Send_Torque(&hfdcan1, 0);
-						DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
-
-						Reset_All_IMU_Yaw_Only();
-					
-						Gimbal_Set_World_Yaw(180.0f);
-
-						Gimbal_Reset_Yaw_SMC();
+						Robot_Reset_Yaw_To_180();
 				}
 			}
 
@@ -401,8 +437,8 @@ switch(robot_mode)
 				 			  {
 										is_base_hitting_now = 1;
 
-										vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
-										vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
+										float vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
+										float vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
 
 										if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
 										{
@@ -412,7 +448,7 @@ switch(robot_mode)
 
 												Gimbal_Add_World_Target(yaw_step, 0.0f);
 
-												vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
+												float vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
 
 												float pitch_diff = vision_target_base_pitch_angle - Gimbal_Get_World_Pitch();
 
@@ -438,20 +474,7 @@ switch(robot_mode)
 							  }
 								else if(Vision_IsOnline() &&VisionData.is_tracking == 1 && rc->mouse.press_r )//右键自瞄   //&&
 								{
-											vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
-											vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;
-
-											vision_target_yaw_angle = 180.0f + vision_yaw_deg;
-											vision_target_pitch_angle = 180.0f + vision_pitch_deg;
-
-											//最短路径
-											while(vision_target_yaw_angle - imu_data->yaw_angle > 180.0f)  vision_target_yaw_angle -= 360.0f;
-											while(vision_target_yaw_angle - imu_data->yaw_angle < -180.0f) vision_target_yaw_angle += 360.0f;
-
-											if(fabs(vision_target_yaw_angle - Gimbal_Get_World_Yaw()) < 90.0f && fabs(vision_target_pitch_angle - Gimbal_Get_World_Pitch()) < 90.0f)
-											{
-													Gimbal_Set_World_Target(vision_target_yaw_angle, vision_target_pitch_angle);
-											}
+											Resolve_Vision_Aim_Target(imu_data, 90.0f);
 								}
 								else
 								{
@@ -462,10 +485,6 @@ switch(robot_mode)
 
 										VisionData.target_yaw_rad = 0.0f;
 										VisionData.target_pitch_rad = 0.0f;
-										vision_yaw_deg = 0.0f;
-										vision_pitch_deg = 0.0f;
-										vision_target_yaw_angle = Gimbal_Get_World_Yaw();
-										vision_target_pitch_angle = Gimbal_Get_World_Pitch();
 								}
 					}
 
@@ -487,16 +506,6 @@ switch(robot_mode)
             }
             key_X_last_state = rc->key.map.X; //更新状态
 
-						//上坎图传
-            static bool key_E_last_state = false;
-            if(rc->key.map.E && !key_E_last_state)
-			  		{
-						  	Servo_Set_Angle(&htim2, TIM_CHANNEL_3, VTM_SERVO_CLIMB);
-
-							  Servo_Set_Angle(&htim2, TIM_CHANNEL_3, VTM_SERVO_CENTER);
-            }
-            key_E_last_state = rc->key.map.E; //更新状态
-
 						//调整摩擦轮转速
 						float offset_step = 10;//每次点按补偿10
 						if(rc->key.map.G && rc->key.map.W && !key_W_last_state) Shooter_Tune_High_Speed((int32_t)offset_step);
@@ -517,8 +526,8 @@ switch(robot_mode)
 						 {
 							    is_base_hitting_now = 1;
 
-								  vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
-						 		  vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
+								  float vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
+						 		  float vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
 
 							    if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
 								{
@@ -528,7 +537,7 @@ switch(robot_mode)
 
 										Gimbal_Add_World_Target(yaw_step, 0.0f);
 
-										vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
+										float vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
 
 										float pitch_diff = vision_target_base_pitch_angle - Gimbal_Get_World_Pitch();
 
@@ -561,20 +570,7 @@ switch(robot_mode)
 						 }
 						 else if(Vision_IsOnline() && VisionData.is_tracking == 1)
               {
-								  vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
-									vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;
-
-									vision_target_yaw_angle = 180.0f + vision_yaw_deg;
-									vision_target_pitch_angle = 180.0f + vision_pitch_deg;
-
-									//最短路径
-									while(vision_target_yaw_angle - imu_data->yaw_angle > 180.0f)  vision_target_yaw_angle -= 360.0f;
-									while(vision_target_yaw_angle - imu_data->yaw_angle < -180.0f) vision_target_yaw_angle += 360.0f;
-
-									if(fabs(vision_target_yaw_angle - Gimbal_Get_World_Yaw()) < 60.0f && fabs(vision_target_pitch_angle - Gimbal_Get_World_Pitch()) < 60.0f)
-									{
-											Gimbal_Set_World_Target(vision_target_yaw_angle, vision_target_pitch_angle);
-									}
+								  Resolve_Vision_Aim_Target(imu_data, 60.0f);
               }
 						else
 						{
@@ -586,10 +582,6 @@ switch(robot_mode)
 
 									VisionData.target_yaw_rad = 0.0f;
 									VisionData.target_pitch_rad = 0.0f;
-									vision_yaw_deg = 0.0f;
-									vision_pitch_deg = 0.0f;
-									vision_target_yaw_angle = Gimbal_Get_World_Yaw();
-									vision_target_pitch_angle = Gimbal_Get_World_Pitch();
 						}
 
 						//Pitch限位
@@ -649,87 +641,13 @@ switch(robot_mode)
 
 				case ROBOT_MODE_AIMING:
 				{
-						 if(Vision_IsOnline() && VisionData.is_tracking == 1)
-              {
-								  vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
-									vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;
-
-									vision_target_yaw_angle = 180.0f + vision_yaw_deg;
-									vision_target_pitch_angle = 180.0f + vision_pitch_deg;
-
-									//最短路径
-									while(vision_target_yaw_angle - imu_data->yaw_angle > 180.0f)  vision_target_yaw_angle -= 360.0f;
-									while(vision_target_yaw_angle - imu_data->yaw_angle < -180.0f) vision_target_yaw_angle += 360.0f;
-
-									if(fabs(vision_target_yaw_angle - Gimbal_Get_World_Yaw()) < 60.0f && fabs(vision_target_pitch_angle - Gimbal_Get_World_Pitch()) < 60.0f)
-									{
-											Gimbal_Set_World_Target(vision_target_yaw_angle, vision_target_pitch_angle);
-									}
-              }
-						else
-						{
-									//更新目标角度
-									float yaw_angle_increment = -(float)rc->rc.right_x * RC_TO_ONE * ky_follow ;
-									float pitch_angle_increment = -(float)rc->rc.right_y * RC_TO_ONE * kpit_follow;
-
-									Gimbal_Add_World_Target(yaw_angle_increment, pitch_angle_increment);
-
-									VisionData.target_yaw_rad = 0.0f;
-									VisionData.target_pitch_rad = 0.0f;
-									vision_yaw_deg = 0.0f;
-									vision_pitch_deg = 0.0f;
-									vision_target_yaw_angle = Gimbal_Get_World_Yaw();
-									vision_target_pitch_angle = Gimbal_Get_World_Pitch();
-						}
-
-						//Pitch限位
-						Gimbal_Clamp_World_Pitch(135.5f, 194.1f);
-
-						//底盘(坐标变换 + 拨轮小陀螺1.5倍速)
-						Chassis_Update_Move(rc, yaw_encoder_diff, CHASSIS_MOVE_AIMING);
+						 Handle_Aiming_Mode(rc, imu_data, yaw_encoder_diff, CHASSIS_MOVE_AIMING);
             break;
 				}
 
 				case ROBOT_MODE_M_AIMING:
 				{
-						  if(Vision_IsOnline() && VisionData.is_tracking == 1)
-              {
-								  vision_yaw_deg = VisionData.target_yaw_rad * RAD_TO_DEG;
-									vision_pitch_deg = VisionData.target_pitch_rad * RAD_TO_DEG;
-
-									vision_target_yaw_angle = 180.0f + vision_yaw_deg;
-									vision_target_pitch_angle = 180.0f + vision_pitch_deg;
-
-									//最短路径
-									while(vision_target_yaw_angle - imu_data->yaw_angle > 180.0f)  vision_target_yaw_angle -= 360.0f;
-									while(vision_target_yaw_angle - imu_data->yaw_angle < -180.0f) vision_target_yaw_angle += 360.0f;
-
-									if(fabs(vision_target_yaw_angle - Gimbal_Get_World_Yaw()) < 60.0f && fabs(vision_target_pitch_angle - Gimbal_Get_World_Pitch()) < 60.0f)
-									{
-											Gimbal_Set_World_Target(vision_target_yaw_angle, vision_target_pitch_angle);
-									}
-              }
-						else
-						{
-									//更新目标角度
-									float yaw_angle_increment = -(float)rc->rc.right_x * RC_TO_ONE * ky_follow ;
-									float pitch_angle_increment = -(float)rc->rc.right_y * RC_TO_ONE * kpit_follow;
-
-									Gimbal_Add_World_Target(yaw_angle_increment, pitch_angle_increment);
-
-									VisionData.target_yaw_rad = 0.0f;
-									VisionData.target_pitch_rad = 0.0f;
-									vision_yaw_deg = 0.0f;
-									vision_pitch_deg = 0.0f;
-									vision_target_yaw_angle = Gimbal_Get_World_Yaw();
-									vision_target_pitch_angle = Gimbal_Get_World_Pitch();
-						}
-
-						//Pitch限位
-						Gimbal_Clamp_World_Pitch(135.5f, 194.1f);
-
-						//底盘(坐标变换, 不改自旋)
-						Chassis_Update_Move(rc, yaw_encoder_diff, CHASSIS_MOVE_M_AIMING);
+						  Handle_Aiming_Mode(rc, imu_data, yaw_encoder_diff, CHASSIS_MOVE_M_AIMING);
             break;
 				}
 

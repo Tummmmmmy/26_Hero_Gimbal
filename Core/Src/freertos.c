@@ -34,7 +34,7 @@
 #include "device_task.h"
 #include "usb_device.h"
 #include "bsp_dwt.h"
-#include "Servo_control.h"
+#include "servo.h"
 #include "bsp_can.h"
 #include "robot_control.h"
 #include "control_task.h"

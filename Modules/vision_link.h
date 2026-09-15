@@ -1,5 +1,5 @@
-#ifndef __CONTROL_VISION_H
-#define __CONTROL_VISION_H
+#ifndef VISION_LINK_H
+#define VISION_LINK_H
 
 #include "main.h"
 

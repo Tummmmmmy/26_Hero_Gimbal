@@ -34,7 +34,7 @@ extern "C" {
 /* USER CODE BEGIN Includes */
 #include "cmsis_os2.h"
 #include "fdcan.h"
-#include "pid_controller.h"
+#include "pid.h"
 #include <stdbool.h>
 extern osMessageQueueId_t canRxQueueHandle;
 

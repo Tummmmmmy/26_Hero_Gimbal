@@ -1,9 +1,9 @@
-#include "bridge.h"
+#include "video_bridge.h"
 
 #include <stddef.h>
 #include <string.h>
 
-#include "bridge_platform.h"
+#include "video_bridge_platform.h"
 #include "CRC.h"
 #include "hero_protocol.h"
 

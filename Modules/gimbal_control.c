@@ -8,7 +8,7 @@
 
 #include "main.h"
 #include "cmsis_os.h"
-#include "pid_controller.h"
+#include "pid.h"
 #include "smc.h"
 #include "gimbal_control.h"
 #include <math.h>

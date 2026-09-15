@@ -1,5 +1,5 @@
 #include "video_task.h"
-#include "bridge.h"
+#include "video_bridge.h"
 #include "cmsis_os2.h"
 #include "cmsis_os.h"
 

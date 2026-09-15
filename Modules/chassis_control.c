@@ -11,7 +11,7 @@
  */
 #include "chassis_control.h"
 #include "main.h"               // PI
-#include "pid_controller.h"
+#include "pid.h"
 #include "Ramp.h"
 #include "shooter_control.h"    // ²ÃÅÐÊý¾Ý×¢Èë
 #include "bsp_DR16.h"           // DR16_SW_UP/MID/DOWN

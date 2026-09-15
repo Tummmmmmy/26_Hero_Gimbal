@@ -37,7 +37,7 @@ float RefTemp = 45.0f;               //目标温度
 
 
 
-pid_struct_t Temperature_PID={0};
+PID_Controller Temperature_PID={0};
 float gyro[3], accel[3], temp;
 float roll,pitch,yaw=0;
 float total_yaw;
@@ -50,7 +50,7 @@ static void INS_Init(void)
 {
 	
     IMU_QuaternionEKF_Init(10, 0.001, 10000000, 1, 0.001f,0); //ekf初始化
-		pid_init(&Temperature_PID,1600,50,40,200,2000); //加热pidlimit
+		PID_Init(&Temperature_PID,1600,50,40,200,2000); //加热pidlimit
 	
 		Mahony_Init(1000);  //mahony姿态解算初始化
     // imu heat init
@@ -61,9 +61,9 @@ static void INS_Init(void)
 uint32_t temp_temperature=0;
 static void IMU_Temperature_Ctrl()
 {
-	  pid_calc(&Temperature_PID,RefTemp,temp); //温度pid
-		temp_temperature=(uint32_t)Temperature_PID.output; 
-		if(Temperature_PID.output<0)
+	  float temp_pid_out = PID_Calculate(&Temperature_PID,RefTemp,temp); //温度pid
+		temp_temperature=(uint32_t)temp_pid_out; 
+		if(temp_pid_out<0)
 		{
 			temp_temperature=0;
 		}

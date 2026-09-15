@@ -24,7 +24,7 @@
 
 #include "bsp_dr16.h"
 #include "bsp_vt03.h"
-#include "bridge_platform.h"
+#include "video_bridge_platform.h"
 
 /* USER CODE END 0 */
 
