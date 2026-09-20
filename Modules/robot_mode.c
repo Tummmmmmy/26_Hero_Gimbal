@@ -12,10 +12,10 @@
 #include "chassis_control.h"
 
 // 当前工作模式
-static Robot_Mode_e s_mode = ROBOT_MODE_OFF;
+static Robot_Mode_e mode = ROBOT_MODE_OFF;
 
 // 模式对应的LED指示(无控制源时保持上一次)
-static LED_State_e s_mode_led = LED_STATE_BOOTING;
+static LED_State_e mode_led = LED_STATE_BOOTING;
 
 /**
  * @brief 更新机器人工作模式
@@ -30,19 +30,19 @@ void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
         switch (rc->rc.s_left)
         {
             case 1: //S
-                s_mode = ROBOT_MODE_BATTLE;
-                s_mode_led = LED_STATE_ENABLED;
+                mode = ROBOT_MODE_BATTLE;
+                mode_led = LED_STATE_ENABLED;
                 break;
 
             case 3: //N
-                s_mode = ROBOT_MODE_FOLLOW;
-                s_mode_led = LED_STATE_ENABLED;
+                mode = ROBOT_MODE_FOLLOW;
+                mode_led = LED_STATE_ENABLED;
                 break;
 
             case 2: //C
             default:
-                s_mode = ROBOT_MODE_OFF;
-                s_mode_led = LED_STATE_DISABLED;
+                mode = ROBOT_MODE_OFF;
+                mode_led = LED_STATE_DISABLED;
                 break;
         }
     }
@@ -52,69 +52,69 @@ void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
         //上坎状态优先: 上坎待命/执行中固定为爬坡模式(不改变LED)
         if (Chassis_Get_Climb_Mode() == CLIMB_MODE_STANDBY || Chassis_Get_Climb_Mode() == CLIMB_MODE_ACTIVE)
         {
-            s_mode = ROBOT_MODE_CLIMB;
+            mode = ROBOT_MODE_CLIMB;
         }
         else if (rc->rc.s_left == DR16_SW_DOWN && rc->rc.s_right == DR16_SW_DOWN)
         {
-            s_mode = ROBOT_MODE_OFF;
-            s_mode_led = LED_STATE_DISABLED;
+            mode = ROBOT_MODE_OFF;
+            mode_led = LED_STATE_DISABLED;
         }
         else if (rc->rc.s_left == DR16_SW_DOWN && rc->rc.s_right == DR16_SW_UP)
         {
-            s_mode = ROBOT_MODE_GIMBAL_ONLY;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_GIMBAL_ONLY;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_DOWN && rc->rc.s_right == DR16_SW_MID)
         {
-            s_mode = ROBOT_MODE_CHASSIS_ONLY;
-            s_mode_led = LED_STATE_DISABLED;
+            mode = ROBOT_MODE_CHASSIS_ONLY;
+            mode_led = LED_STATE_DISABLED;
         }
         else if (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_MID)
         {
-            s_mode = ROBOT_MODE_FOLLOW;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_FOLLOW;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_MID)
         {
-            s_mode = ROBOT_MODE_SHOOT;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_SHOOT;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_DOWN)
         {
-            s_mode = ROBOT_MODE_SHOOT_LOW;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_SHOOT_LOW;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_UP)
         {
-            s_mode = ROBOT_MODE_AIMING;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_AIMING;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_UP)
         {
-            s_mode = ROBOT_MODE_M_AIMING;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_M_AIMING;
+            mode_led = LED_STATE_ENABLED;
         }
         else if (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_DOWN)
         {
-            s_mode = ROBOT_MODE_CLIMB;
-            s_mode_led = LED_STATE_ENABLED;
+            mode = ROBOT_MODE_CLIMB;
+            mode_led = LED_STATE_ENABLED;
         }
     }
     //无控制源: 强制失能, LED保持
     else
     {
-        s_mode = ROBOT_MODE_OFF;
+        mode = ROBOT_MODE_OFF;
     }
 }
 
 // 获取当前工作模式
 Robot_Mode_e Robot_Mode_Get(void)
 {
-    return s_mode;
+    return mode;
 }
 
 // 获取模式对应的LED指示
 LED_State_e Robot_Mode_Get_Led_State(void)
 {
-    return s_mode_led;
+    return mode_led;
 }

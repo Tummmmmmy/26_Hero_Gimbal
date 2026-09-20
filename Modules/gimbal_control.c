@@ -6,8 +6,8 @@
  * 均收归本模块私有，Robot_Control_Loop 只负责翻译遥控/视觉指令并通过接口下达。
  */
 
-#include "main.h"
 #include "cmsis_os.h"
+#include "motor.h"
 #include "pid.h"
 #include "smc.h"
 #include "gimbal_control.h"
@@ -31,12 +31,13 @@ static float rc_target_pitch_encoder = 0.0f;
 static Gimbal_Mode_e gimbal_mode = GIMBAL_MODE_IMU;
 static uint8_t gimbal_control_initialized = 0;
 
-static bool s_active = false;
-static bool s_base_hitting = false;
+static bool active = false;
+static bool base_hitting = false;
 
-static Gimbal_Output_t s_output;
+static Gimbal_Output_t output;
+static Gimbal_Debug_Data_t debug;
 
-// ===== 控制参数(比赛验证值, 非必要不要改动) =====
+// ===== 控制参数=====
 
 //Yaw
 //速度环
@@ -271,9 +272,9 @@ void Gimbal_Set_Mode(Gimbal_Mode_e mode, const IMU_Data_t* imu)
 
 
 //是否执行闭环控制
-void Gimbal_Set_Active(bool active)
+void Gimbal_Set_Active(bool enable)
 {
-    s_active = active;
+    active = enable;
 }
 
 
@@ -345,7 +346,7 @@ void Gimbal_Set_Base_Hitting(bool hitting)
     }
     is_base_hitting_last_frame = hitting;
 
-    s_base_hitting = hitting;
+    base_hitting = hitting;
 }
 
 
@@ -476,7 +477,7 @@ void Gimbal_Control_Update(const IMU_Data_t* imu)
     float   gimbal_yaw_current = 0.0f;
     int16_t gimbal_pitch_current = 0;
 
-    if(s_active)
+    if(active)
     {
         if(gimbal_mode == GIMBAL_MODE_IMU)//跟随
         {
@@ -504,7 +505,7 @@ void Gimbal_Control_Update(const IMU_Data_t* imu)
             gimbal_pitch_current = (int16_t)SMC_Calc(&gimbal_pitch_smc_imu);
 
 
-            if(s_base_hitting)
+            if(base_hitting)
             {
                 float current_err = rc_target_world_pitch_angle - imu->pitch_angle;
 
@@ -566,16 +567,29 @@ void Gimbal_Control_Update(const IMU_Data_t* imu)
     }
 
     //输出快照，主调度器统一执行 CAN 发送
-    s_output.yaw_current   = gimbal_yaw_current;
-    s_output.pitch_current = gimbal_pitch_current;
-    s_output.yaw_degree    = gimbal_yaw_motor.mechanical_degree;
-    s_output.pitch_degree  = PITCH_HORIZON_DEGREE - gimbal_pitch_motor.mechanical_degree;
+    output.yaw_current   = gimbal_yaw_current;
+    output.pitch_current = gimbal_pitch_current;
+    output.yaw_degree    = gimbal_yaw_motor.mechanical_degree;
+    output.pitch_degree  = PITCH_HORIZON_DEGREE - gimbal_pitch_motor.mechanical_degree;
 }
 
 
 const Gimbal_Output_t* Gimbal_Get_Output(void)
 {
-    return &s_output;
+    return &output;
+}
+
+
+//调试打印快照
+const Gimbal_Debug_Data_t* Gimbal_Get_Debug_Data(void)
+{
+    debug.yaw_ref_pos       = gimbal_yaw_smc_imu.ref_pos;
+    debug.yaw_fdb_pos       = gimbal_yaw_smc_imu.fdb_pos;
+    debug.pitch_ref_pos     = gimbal_pitch_smc_imu.ref_pos;
+    debug.pitch_fdb_pos     = gimbal_pitch_smc_imu.fdb_pos;
+    debug.yaw_motor_angle   = (float)gimbal_yaw_motor.feedback.angle;
+    debug.pitch_motor_angle = (float)gimbal_pitch_motor.feedback.angle;
+    return &debug;
 }
 
 

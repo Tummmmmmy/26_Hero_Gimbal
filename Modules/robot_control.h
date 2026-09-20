@@ -11,6 +11,7 @@
 
 #include "main.h"
 #include "INS_task.h"
+#include "robot_types.h"
 
 // 上电初始化所有控制模块(All_Init 任务中调用)
 void Robot_Param_Init(void);

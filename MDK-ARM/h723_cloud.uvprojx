@@ -1008,6 +1008,11 @@
           <GroupName>BSP</GroupName>
           <Files>
             <File>
+              <FileName>bsp_can.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_can.c</FilePath>
+            </File>
+            <File>
               <FileName>bsp_buzzer.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\bsp_buzzer.c</FilePath>
@@ -1031,11 +1036,6 @@
               <FileName>bsp_dwt.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\bsp_dwt.c</FilePath>
-            </File>
-            <File>
-              <FileName>bsp_can.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\BSP\bsp_can.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1168,9 +1168,9 @@
               <FilePath>..\Modules\video_bridge\video_bridge_platform.c</FilePath>
             </File>
             <File>
-              <FileName>hero_protocol.h</FileName>
+              <FileName>video_protocol.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\Modules\video_bridge\hero_protocol.h</FilePath>
+              <FilePath>..\Modules\video_bridge\video_protocol.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -1208,14 +1208,19 @@
               <FilePath>..\Task\INS_task.c</FilePath>
             </File>
             <File>
+              <FileName>control_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Task\control_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Task\can_task.c</FilePath>
+            </File>
+            <File>
               <FileName>vision_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Task\vision_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>device_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Task\device_task.c</FilePath>
             </File>
             <File>
               <FileName>video_task.c</FileName>
@@ -1228,19 +1233,14 @@
               <FilePath>..\Task\monitor_task.c</FilePath>
             </File>
             <File>
-              <FileName>control_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Task\control_task.c</FilePath>
-            </File>
-            <File>
               <FileName>print_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Task\print_task.c</FilePath>
             </File>
             <File>
-              <FileName>can_task.c</FileName>
+              <FileName>device_task.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Task\can_task.c</FilePath>
+              <FilePath>..\Task\device_task.c</FilePath>
             </File>
           </Files>
         </Group>

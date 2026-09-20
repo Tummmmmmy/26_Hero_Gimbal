@@ -1,6 +1,7 @@
 #ifndef ROBOT_MODE_H
 #define ROBOT_MODE_H
 
+#include "robot_types.h"
 #include "remote_control.h"
 
 // Robot operating mode

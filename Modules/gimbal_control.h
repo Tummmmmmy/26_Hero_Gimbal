@@ -18,6 +18,17 @@ typedef struct
     float   pitch_degree;   //Pitch相对水平角度(度, 供UI)
 } Gimbal_Output_t;
 
+//调试打印快照(供 Print_Entry_Task 使用)
+typedef struct
+{
+    float yaw_ref_pos;        //Yaw SMC 目标角度(deg)
+    float yaw_fdb_pos;        //Yaw SMC 反馈角度(deg)
+    float pitch_ref_pos;      //Pitch SMC 目标角度(deg)
+    float pitch_fdb_pos;      //Pitch SMC 反馈角度(deg)
+    float yaw_motor_angle;    //Yaw 电机编码器原始值
+    float pitch_motor_angle;  //Pitch 电机编码器原始值
+} Gimbal_Debug_Data_t;
+
 //初始化云台电机与控制器(Robot_Param_Init 中调用)
 void Gimbal_Control_Init(void);
 
@@ -63,6 +74,9 @@ void Gimbal_Clamp_Encoder_Pitch(float min_val, float max_val);
 //闭环控制计算(每个控制周期调用一次)
 void Gimbal_Control_Update(const IMU_Data_t* imu);
 const Gimbal_Output_t* Gimbal_Get_Output(void);
+
+//获取调试打印快照(每次调用刷新)
+const Gimbal_Debug_Data_t* Gimbal_Get_Debug_Data(void);
 
 //Yaw编码器偏差(已做±半圈归一化, 供底盘跟随计算)
 float Gimbal_Get_Yaw_Encoder_Diff(void);

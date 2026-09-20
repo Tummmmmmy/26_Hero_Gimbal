@@ -22,54 +22,6 @@ extern bridge_context_t g_bridge;
 
 
 
-
-
-
-
-
-
-
-
-
-
-//// 【测试】：虚拟 DMA 写入下标
-//// ==============================================================
-//static size_t fake_dma_write_index = 0;
-
-///**
-// * @brief 暴露给 USB 接收中断的“喂狗”函数
-// *        把 USB 收到的数据伪装成 DMA 塞进水缸
-// */
-//void USB_Feed_Video_Data(uint8_t *buf, uint32_t len)
-//{
-//    for (uint32_t i = 0; i < len; i++) 
-//    {
-//        // 把 USB 收到的字节，一个个塞进队友定义的大水缸里
-//        g_bridge.rx_dma_buffer[fake_dma_write_index] = buf[i];
-//        
-//        // 下标循环递增
-//        fake_dma_write_index = (fake_dma_write_index + 1) % sizeof(g_bridge.rx_dma_buffer);
-//    }
-//}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 static const uint8_t CRC8_INIT = 0xff;
 static const uint8_t CRC8_TAB[256] = {
     0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83, 0xc2, 0x9c, 0x7e, 0x20, 0xa3, 0xfd, 0x1f, 0x41,
@@ -180,19 +132,6 @@ void bridge_platform_uart_start_rx_dma(uint8_t* buffer, size_t size)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 /**
  * @brief 获取 DMA 当前写入位置 (H7 最容易翻车的地方)
  */
@@ -205,16 +144,6 @@ size_t bridge_platform_uart_rx_write_index(void)
     // DMA 计数器是递减的，当前位置 = 总大小 - 剩余未传数量
     return sizeof(g_bridge.rx_dma_buffer) - __HAL_DMA_GET_COUNTER(VISION_UART_HANDLE.hdmarx);
 	
-	
-	
-	
-
-//	
-//	
-//	
-//	 return fake_dma_write_index;
-//	
-//	
 }
 
 /**
@@ -264,13 +193,6 @@ bool bridge_platform_send_custom_0310(const uint8_t* data, uint16_t size)
     // --- 4. 组装整包 CRC16
     Local_Append_CRC16(vtm_tx_buf, total_size);
 
-//    // --- 5. 阻塞发送给大疆图传 ---
-//    // 阻塞发送全程 CPU 控制，不需要调用 SCB_CleanDCache 刷缓存，极其稳定！
-//    if (HAL_UART_Transmit(&VTM_UART_HANDLE, vtm_tx_buf, total_size, 10) == HAL_OK) {
-//        return true; 
-//    }
-
-
     // --- 5. 刷新 L1 Cache ---
     SCB_CleanDCache_by_Addr((uint32_t *)vtm_tx_buf, total_size);
 
@@ -279,71 +201,6 @@ bool bridge_platform_send_custom_0310(const uint8_t* data, uint16_t size)
 		{
         return true; 
     }
-
-
-
-
-
-
-//    // 5.强行把 Cache 里的数据刷入物理内存，让 DMA 能读到最新数据
-//    SCB_CleanDCache_by_Addr((uint32_t *)vtm_tx_buf, total_size);
-
-//    // =======================================================
-//    // 6. 专治跑久了 DMA 突然停工的 Bug！
-//    // =======================================================
-//    if (VTM_UART_HANDLE.gState != HAL_UART_STATE_READY) 
-//    {
-//        // 如果串口忙或卡死，无情打断，清除所有错误标志！
-//        HAL_UART_AbortTransmit(&VTM_UART_HANDLE);
-//        __HAL_UART_CLEAR_FLAG(&VTM_UART_HANDLE, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_PEF | UART_CLEAR_FEF);
-//    }
-
-//    // 7. 使用 DMA 异步发射
-//    if (HAL_UART_Transmit_DMA(&VTM_UART_HANDLE, vtm_tx_buf, total_size) == HAL_OK) {
-//        return true; 
-//    }
-
-
-
-
-
-//    SCB_CleanDCache_by_Addr((uint32_t *)vtm_tx_buf, total_size);
-
-//    // =======================================================
-//    // 6.专治 TX 卡死，绝不误伤 RX 接收！
-//    // =======================================================
-//    // 注意：只判断发送状态 gState，不看接收状态 RxState
-//    if (VTM_UART_HANDLE.gState != HAL_UART_STATE_READY) 
-//    {
-//        // 1. 只终止发送！(千万不能用 HAL_UART_Abort，那会把接收也杀掉)
-//        HAL_UART_AbortTransmit(&VTM_UART_HANDLE);
-//        
-//        // 2. 清理所有硬件报错红旗
-//        __HAL_UART_CLEAR_FLAG(&VTM_UART_HANDLE, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_PEF | UART_CLEAR_FEF);
-//        
-//        // 3. 强行只把 TX 的状态机掰回 READY
-//        VTM_UART_HANDLE.gState = HAL_UART_STATE_READY;
-//        // 【绝对不能碰 VTM_UART_HANDLE.RxState! 保护遥控器接收！】
-//        
-//        // 4. 砸开串口互斥锁
-//        __HAL_UNLOCK(&VTM_UART_HANDLE);
-//        
-//        // 5. 精准砸开 TX DMA 的句柄锁，绝不碰 RX DMA
-//        if (VTM_UART_HANDLE.hdmatx != NULL) {
-//            VTM_UART_HANDLE.hdmatx->State = HAL_DMA_STATE_READY;
-//            __HAL_UNLOCK(VTM_UART_HANDLE.hdmatx);
-//        }
-//    }
-
-//    // 7. 使用 DMA 异步发射！
-//    if (HAL_UART_Transmit_DMA(&VTM_UART_HANDLE, vtm_tx_buf, total_size) == HAL_OK) {
-//        return true; 
-//    }
-//		
-		
-		
-
-
 
     
     return false; // 串口堵塞或发送失败

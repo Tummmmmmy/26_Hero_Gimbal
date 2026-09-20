@@ -9,6 +9,17 @@
 
 #include "main.h"
 #include "fdcan.h"
+#include "cmsis_os2.h"
+
+//CAN接收队列数据
+typedef struct
+{
+    FDCAN_HandleTypeDef* hfdcan;
+    uint32_t can_id;
+    uint8_t data[8];
+} CAN_Rx_Message_t;
+
+extern osMessageQueueId_t canRxQueueHandle;
 
 // FDCAN 硬件层初始化：配置滤波器、启动 FDCAN1/2/3，并开启 RX FIFO0 接收中断
 void BSP_FDCAN_Config(void);

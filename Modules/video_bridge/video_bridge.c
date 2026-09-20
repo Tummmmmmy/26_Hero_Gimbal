@@ -5,7 +5,7 @@
 
 #include "video_bridge_platform.h"
 #include "CRC.h"
-#include "hero_protocol.h"
+#include "video_protocol.h"
 
 enum {
     BRIDGE_QUEUE_CAPACITY = 50,
@@ -18,14 +18,14 @@ static void debug_log(const char* message) {
     bridge_platform_debug_log(message);
 }
 
-static uint8_t packet_priority(const hero_video_packet_header_v1_t* header) {
-    switch ((hero_packet_type_t)header->packet_type) {
-        case HERO_PACKET_RESET:
-        case HERO_PACKET_CONFIG:
+static uint8_t packet_priority(const video_packet_header_v1_t* header) {
+    switch ((video_packet_type_t)header->packet_type) {
+        case VIDEO_PACKET_RESET:
+        case VIDEO_PACKET_CONFIG:
             return BRIDGE_HIGH_PRIORITY;
-        case HERO_PACKET_HEARTBEAT:
+        case VIDEO_PACKET_HEARTBEAT:
             return BRIDGE_MEDIUM_PRIORITY;
-        case HERO_PACKET_STREAM_CHUNK:
+        case VIDEO_PACKET_STREAM_CHUNK:
         default:
             return BRIDGE_LOW_PRIORITY;
     }
@@ -90,28 +90,28 @@ static void consume_byte(bridge_context_t* context, uint8_t byte) {
 
     context->parse_buffer[context->parse_size++] = byte;
 
-    if (context->parse_size == 1u && byte != (uint8_t)(HERO_MAGIC & 0xFFu)) {
+    if (context->parse_size == 1u && byte != (uint8_t)(VIDEO_MAGIC & 0xFFu)) {
         context->parse_size = 0u;
         return;
     }
 
     if (context->parse_size == 2u) {
         const uint16_t magic = (uint16_t)context->parse_buffer[0] | ((uint16_t)context->parse_buffer[1] << 8u);
-        if (magic != HERO_MAGIC) {
+        if (magic != VIDEO_MAGIC) {
             context->parse_buffer[0] = context->parse_buffer[1];
             context->parse_size = 1u;
             return;
         }
     }
 
-    if (context->parse_size < HERO_HEADER_SIZE) {
+    if (context->parse_size < VIDEO_HEADER_SIZE) {
         return;
     }
 
     {
-        hero_video_packet_header_v1_t header;
+        video_packet_header_v1_t header;
         memcpy(&header, context->parse_buffer, sizeof(header));
-        if (!hero_header_looks_valid(&header)) {
+        if (!video_header_looks_valid(&header)) {
             ++context->stats.packets_length_error;
             if (context->stats.packets_length_error <= 3u || (context->stats.packets_length_error % 50u) == 0u) {
                 debug_log("[Error] Invalid packet header");
@@ -121,17 +121,17 @@ static void consume_byte(bridge_context_t* context, uint8_t byte) {
             return;
         }
 
-        const uint16_t total_size = (uint16_t)(HERO_HEADER_SIZE + header.payload_len);
+        const uint16_t total_size = (uint16_t)(VIDEO_HEADER_SIZE + header.payload_len);
         if (context->parse_size < total_size) {
             return;
         }
 
         {
             const uint16_t expected_crc = header.packet_crc16;
-            uint8_t crc_buffer[HERO_MAX_PACKET_SIZE - sizeof(uint16_t)];
-            const uint16_t prefix_size = (uint16_t)offsetof(hero_video_packet_header_v1_t, packet_crc16);
+            uint8_t crc_buffer[VIDEO_MAX_PACKET_SIZE - sizeof(uint16_t)];
+            const uint16_t prefix_size = (uint16_t)offsetof(video_packet_header_v1_t, packet_crc16);
             memcpy(crc_buffer, context->parse_buffer, prefix_size);
-            memcpy(crc_buffer + prefix_size, context->parse_buffer + HERO_HEADER_SIZE, header.payload_len);
+            memcpy(crc_buffer + prefix_size, context->parse_buffer + VIDEO_HEADER_SIZE, header.payload_len);
             const uint16_t actual_crc = crc16_ccitt_false(crc_buffer, (size_t)(prefix_size + header.payload_len));
 
             if (actual_crc != expected_crc) {

@@ -31,13 +31,7 @@
 //==================== 整机状态(仅本模块持有) ====================
 
 // 系统LED状态(device_task 通过 Robot_Get_Led_State 读取)
-static volatile LED_State_e s_led_state = LED_STATE_BOOTING;
-
-// 复位触发计时(遥控拨轮长按)
-static uint32_t s_reset_trigger_timer = 0;
-
-// 射击摩擦轮档位(F/G 键切换) 0:关, 1:12m/s, 2:16m/s
-static uint8_t s_fric_level = 0;
+static volatile LED_State_e led_state = LED_STATE_BOOTING;
 
 //==================== 瞄准状态 ====================
 
@@ -95,7 +89,7 @@ void Robot_Param_Init(void)
 // 获取系统LED状态(device_task 读取)
 LED_State_e Robot_Get_Led_State(void)
 {
-    return s_led_state;
+    return led_state;
 }
 
 //==================== 内部辅助函数 ====================
@@ -103,7 +97,7 @@ LED_State_e Robot_Get_Led_State(void)
 // V键复位: Yaw归零到180度并复位SMC(失能与战斗模式下均可触发)
 static void Robot_Reset_Yaw_To_180(void)
 {
-    s_led_state = LED_STATE_RESET;
+    led_state = LED_STATE_RESET;
 
     LK_Send_Torque(&hfdcan1, 0);
     DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
@@ -114,6 +108,94 @@ static void Robot_Reset_Yaw_To_180(void)
 
     Gimbal_Reset_Yaw_SMC();
 }
+
+// 主动下发零输出: 云台/摩擦轮/拨盘停机(IMU未就绪/复位/失能时使用)
+static void Robot_Zero_Outputs(void)
+{
+    LK_Send_Torque(&hfdcan1, 0);
+    DJI_Motor_Send_Command(&hfdcan2, 0x1FF, 0, 0, 0, 0);
+    DJI_Motor_Send_Command(&hfdcan2, 0x200, 0, 0, 0, 0);
+    DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
+    Dial_Send_Speed(&hfdcan1, 0);
+}
+
+
+// 复位手势处理: 拨轮长按(仅OFF)触发整机复位, V键(OFF/BATTLE)触发Yaw归零;
+// 整机复位含500拍等待(替代原osDelay(500)), 返回1表示等待期, 主循环本拍直接返回
+static uint8_t Robot_Handle_Reset(const RC_Data_t* rc, Robot_Mode_e robot_mode)
+{
+    static uint32_t reset_trigger_timer = 0;   //拨轮长按计时
+    static uint32_t reset_wait_timer = 0;      //复位执行前等待
+    static bool key_V_last_state = false;
+
+    //等待期: 不执行模式调度与CAN发送, LED保持复位指示
+    if(reset_wait_timer > 0)
+    {
+        led_state = LED_STATE_RESET;
+        reset_wait_timer--;
+
+        if(reset_wait_timer > 0)
+        {
+            return 1;
+        }
+
+        //等待结束, 执行复位
+        Reset_All_IMU_Yaw_Only();
+        Shooter_Reset_Stats();
+        Gimbal_Reset_Initialized();
+
+        key_V_last_state = rc->key.map.V; //更新状态
+
+        return 0;
+    }
+
+    uint8_t v_key_edge = (rc->key.map.V && !key_V_last_state);
+
+    if(robot_mode == ROBOT_MODE_OFF)
+    {
+        if(rc->rc.wheel < -500)
+        {
+            reset_trigger_timer++;
+
+            //持续足够长时间
+            if(reset_trigger_timer >= 2000)
+            {
+                reset_trigger_timer = 0;
+                led_state = LED_STATE_RESET;
+
+                Robot_Zero_Outputs();
+
+                reset_wait_timer = 500;
+
+                return 1;
+            }
+        }
+        else if(v_key_edge)
+        {
+            Robot_Reset_Yaw_To_180();
+        }
+        else
+        {
+            reset_trigger_timer = 0;
+        }
+    }
+    else
+    {
+        reset_trigger_timer = 0;
+
+        if(robot_mode == ROBOT_MODE_BATTLE && v_key_edge)
+        {
+            Robot_Reset_Yaw_To_180();
+        }
+    }
+
+    key_V_last_state = rc->key.map.V; //更新状态
+
+    return 0;
+}
+
+
+
 
 // 视觉目标解析: 弧度转角度, +180坐标系偏移, 按IMU yaw取最短路径;
 // 与当前世界目标偏差在 gate_deg 内才写入, 返回1=已写入
@@ -137,6 +219,9 @@ static uint8_t Resolve_Vision_Aim_Target(const IMU_Data_t* imu_data, float gate_
 
     return 0;
 }
+
+
+
 
 // 自瞄/手动自瞄公共主体: 视觉跟踪或右杆跟随 + Pitch限位 + 底盘移动(风格由参数决定)
 static void Handle_Aiming_Mode(const RC_Data_t* rc, const IMU_Data_t* imu_data, float yaw_encoder_diff, Chassis_Move_Style_e move_style)
@@ -164,6 +249,59 @@ static void Handle_Aiming_Mode(const RC_Data_t* rc, const IMU_Data_t* imu_data, 
     Chassis_Update_Move(rc, yaw_encoder_diff, move_style);
 }
 
+// 雷达基地打击辅助: 按视觉基地目标限幅步进逼近, 连续对准200拍后确认锁定
+// 返回: 0=无基地目标, 1=本拍处理中, 2=本拍达到对准确认(已置锁定LED)
+static uint8_t Robot_Handle_Base_Aim(const IMU_Data_t* imu_data)
+{
+    static uint16_t lock_confirm_timer = 0;
+
+    //无基地目标
+    if(VisionData.target_yaw_base_hit == 0 && VisionData.target_pitch_base_hit == 0) return 0;
+
+    float vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
+    float vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
+
+    if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
+    {
+        float yaw_step = vision_base_yaw_deg * kyaw;
+        if(yaw_step > yaw_step_max)  yaw_step = yaw_step_max;
+        if(yaw_step < -yaw_step_max) yaw_step = -yaw_step_max;
+
+        Gimbal_Add_World_Target(yaw_step, 0.0f);
+
+        float vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
+
+        float pitch_diff = vision_target_base_pitch_angle - Gimbal_Get_World_Pitch();
+
+        float pitch_step = pitch_diff * kpitch;
+        if(pitch_step > pitch_step_max)  pitch_step = pitch_step_max;
+        if(pitch_step < -pitch_step_max) pitch_step = -pitch_step_max;
+
+        Gimbal_Add_World_Target(0.0f, pitch_step);
+
+        float yaw_error = fabsf(vision_base_yaw_deg);
+        float actual_pitch_err = fabsf(vision_target_base_pitch_angle - imu_data->pitch_angle);
+
+        if(yaw_error <= 0.1f && actual_pitch_err <= 0.1f)
+        {
+            lock_confirm_timer++;
+            if(lock_confirm_timer > 200)
+            {
+                led_state = LED_STATE_BASE_HIT_READY;
+                lock_confirm_timer = 200;
+                return 2;
+            }
+        }
+        else if(yaw_error > 0.1f || actual_pitch_err > 0.1f)
+        {
+            lock_confirm_timer = 0;
+            led_state = LED_STATE_ENABLED;
+        }
+    }
+
+    return 1;
+}
+
 void Robot_Control_Loop(const IMU_Data_t* imu_data)
 {
     Robot_Mode_e robot_mode = ROBOT_MODE_OFF;
@@ -182,14 +320,9 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 	  //IMU数据就绪
 	  if(imu_ready_flag == 0)
     {
-        robot_mode = ROBOT_MODE_OFF; 
         last_robot_mode = ROBOT_MODE_OFF; 
 			
-		  	LK_Send_Torque(&hfdcan1, 0);
-			  DJI_Motor_Send_Command(&hfdcan2, 0x1FF, 0, 0, 0, 0);
-        DJI_Motor_Send_Command(&hfdcan2, 0x200, 0, 0, 0, 0);
-		  	DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
-        Dial_Send_Speed(&hfdcan1, 0);
+		  	Robot_Zero_Outputs();
         return; 
     }
 									
@@ -197,55 +330,15 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 				//模式选择: 由 robot_mode 模块根据遥控来源/上坎状态决定, 同时维护模式LED指示
 		Robot_Mode_Update(rc, control_source);
 		robot_mode = Robot_Mode_Get();
-		s_led_state = Robot_Mode_Get_Led_State();
-static bool key_V_last_state = false;
-		
-		//RESET
-    if(robot_mode == ROBOT_MODE_OFF)
-    {
-        if(rc->rc.wheel < -500)
-        {
-            s_reset_trigger_timer++;
-
-            //持续足够长时间
-            if(s_reset_trigger_timer >= 2000)
-            {
-						    s_reset_trigger_timer=0;
-							  s_led_state = LED_STATE_RESET;
-							
-								LK_Send_Torque(&hfdcan1, 0);
-								DJI_Motor_Send_Command(&hfdcan2, 0x1FF, 0, 0, 0, 0);
-								DJI_Motor_Send_Command(&hfdcan2, 0x200, 0, 0, 0, 0);
-								DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
-								Dial_Send_Speed(&hfdcan1, 0);
-                osDelay(500);
-
-								Reset_All_IMU_Yaw_Only();
-							  Shooter_Reset_Stats();
-								Gimbal_Reset_Initialized();
-            }
-        }
-				else if(rc->key.map.V && !key_V_last_state)
-				{			
-						Robot_Reset_Yaw_To_180();
-				}
-        else
-        {
-            s_reset_trigger_timer = 0;
-        }
-    }
-    else s_reset_trigger_timer = 0;
+		led_state = Robot_Mode_Get_Led_State();
 		
 		
-    if(robot_mode == ROBOT_MODE_BATTLE)
-    {
-				if(rc->key.map.V && !key_V_last_state)
-				{
-						Robot_Reset_Yaw_To_180();
-				}
-			}
-
-		key_V_last_state = rc->key.map.V; //更新状态
+		
+		//RESET: 复位手势处理(拨轮长按整机复位/V键Yaw归零)
+		if(Robot_Handle_Reset(rc, robot_mode))
+		{
+			return;   //等待期: 本拍不执行后续模式调度与CAN发送
+		}
 		
 		
 		
@@ -336,7 +429,6 @@ static bool key_V_last_state = false;
 		
 		
 		static bool Key_E_last_state = false;
-
 		static bool Key_Q_last_state = false;
     static bool vtm_look_down = false;
 
@@ -390,15 +482,9 @@ switch(robot_mode)
 								
 								Chassis_On_Robot_Off();
 							
-                LK_Send_Torque(&hfdcan1, 0);
-								DJI_Motor_Send_Command(&hfdcan3, 0x1FF, 0, 0, 0, 0);
-								DJI_Motor_Send_Command(&hfdcan2, 0x1FF, 0, 0, 0, 0);
-								DJI_Motor_Send_Command(&hfdcan2, 0x200, 0, 0, 0, 0);
-								
-								Dial_Send_Speed(&hfdcan1, 0);
+                Robot_Zero_Outputs();
 							
 
-								s_fric_level = 0;
 						}
 					
             if(Gimbal_Is_Initialized() && last_robot_mode == ROBOT_MODE_OFF)
@@ -433,45 +519,15 @@ switch(robot_mode)
             {
 								//云台控制
 								//雷达
-						    if(rc->key.map.R && (VisionData.target_yaw_base_hit != 0 || VisionData.target_pitch_base_hit != 0))
-				 			  {
-										is_base_hitting_now = 1;
-
-										float vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
-										float vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
-
-										if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
+						    if(rc->key.map.R)
+						    {
+										uint8_t base_aim_ret = Robot_Handle_Base_Aim(imu_data);
+										if(base_aim_ret != 0)
 										{
-												float yaw_step = vision_base_yaw_deg * kyaw;
-												if(yaw_step > yaw_step_max)  yaw_step = yaw_step_max;
-												if(yaw_step < -yaw_step_max) yaw_step = -yaw_step_max;
-
-												Gimbal_Add_World_Target(yaw_step, 0.0f);
-
-												float vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
-
-												float pitch_diff = vision_target_base_pitch_angle - Gimbal_Get_World_Pitch();
-
-												float pitch_step = pitch_diff * kpitch;
-												if(pitch_step > pitch_step_max)  pitch_step = pitch_step_max;
-												if(pitch_step < -pitch_step_max) pitch_step = -pitch_step_max;
-
-												Gimbal_Add_World_Target(0.0f, pitch_step);
-
-												float yaw_error = fabsf(vision_base_yaw_deg);
-												float actual_pitch_err = fabsf(vision_target_base_pitch_angle - imu_data->pitch_angle);
-
-												if(yaw_error <= 0.1f && actual_pitch_err <= 0.1f)
-												{
-													   is_base_locked = 1;
-														 s_led_state = LED_STATE_BASE_HIT_READY;
-												}
-												else
-												{
-														 s_led_state = LED_STATE_ENABLED;
-												}
+												is_base_hitting_now = 1;
+												if(base_aim_ret == 2) is_base_locked = 1;   //对准确认后置基地锁定(供底盘上报)
 										}
-							  }
+						    }
 								else if(Vision_IsOnline() &&VisionData.is_tracking == 1 && rc->mouse.press_r )//右键自瞄   //&&
 								{
 											Resolve_Vision_Aim_Target(imu_data, 90.0f);
@@ -522,51 +578,10 @@ switch(robot_mode)
 
 				case ROBOT_MODE_GIMBAL_ONLY:
         {
-					   if(ABS(rc->rc.wheel) > 500 && (VisionData.target_yaw_base_hit != 0 || VisionData.target_pitch_base_hit != 0))
+					   //雷达: 拨轮触发基地打击(连续对准200拍后确认, 由辅助函数内部处理)
+					   if(ABS(rc->rc.wheel) > 500 && Robot_Handle_Base_Aim(imu_data) != 0)
 						 {
 							    is_base_hitting_now = 1;
-
-								  float vision_base_yaw_deg = VisionData.target_yaw_base_hit * RAD_TO_DEG;
-						 		  float vision_base_pitch_deg = VisionData.target_pitch_base_hit * RAD_TO_DEG;
-
-							    if(fabsf(vision_base_yaw_deg) < 180 && fabsf(vision_base_pitch_deg) < 90)
-								{
-										float yaw_step = vision_base_yaw_deg * kyaw;
-										if(yaw_step > yaw_step_max)  yaw_step = yaw_step_max;
-										if(yaw_step < -yaw_step_max) yaw_step = -yaw_step_max;
-
-										Gimbal_Add_World_Target(yaw_step, 0.0f);
-
-										float vision_target_base_pitch_angle = 180.0f - vision_base_pitch_deg;
-
-										float pitch_diff = vision_target_base_pitch_angle - Gimbal_Get_World_Pitch();
-
-										float pitch_step = pitch_diff * kpitch;
-										if(pitch_step > pitch_step_max)  pitch_step = pitch_step_max;
-										if(pitch_step < -pitch_step_max) pitch_step = -pitch_step_max;
-
-										Gimbal_Add_World_Target(0.0f, pitch_step);
-
-										float yaw_error = fabsf(vision_base_yaw_deg);
-										float actual_pitch_err = fabsf(vision_target_base_pitch_angle - imu_data->pitch_angle);
-
-										static uint16_t lock_confirm_timer = 0;
-
-										if(yaw_error <= 0.1f && actual_pitch_err <= 0.1f)
-										{
-												lock_confirm_timer++;
-												if(lock_confirm_timer > 200)
-												{
-														s_led_state = LED_STATE_BASE_HIT_READY;
-														lock_confirm_timer = 200;
-												}
-										}
-										else if (yaw_error > 0.1f || actual_pitch_err > 0.1f)
-										{
-												lock_confirm_timer = 0;
-												s_led_state = LED_STATE_ENABLED;
-										}
-								}
 						 }
 						 else if(Vision_IsOnline() && VisionData.is_tracking == 1)
               {
@@ -611,7 +626,7 @@ switch(robot_mode)
 
 						if(control_source != CONTROL_SOURCE_VTM)
 						{
-						Shooter_Control_Disable();
+						   Shooter_Control_Disable();
 						}
 
 						Chassis_Set_Battle_Mode(BATTLE_FOLLOW);
@@ -706,111 +721,47 @@ switch(robot_mode)
     Gimbal_Set_Active(robot_mode != ROBOT_MODE_CHASSIS_ONLY && robot_mode != ROBOT_MODE_OFF);
     Gimbal_Control_Update(imu_data);
 		
-        Shooter_Set_System_State(robot_mode == ROBOT_MODE_OFF,
-                                 robot_mode == ROBOT_MODE_AIMING,
-                                 (robot_mode == ROBOT_MODE_BATTLE && is_aiming_now == 1),
-                                 ABS(rc->rc.wheel) < 100);
+        //射击: 组装系统上下文并交给 Shooter 模块(输入翻译/射击决策在模块内部完成)
+        Shooter_Context_t shooter_ctx;
+        shooter_ctx.rc             = rc;
+        shooter_ctx.robot_mode     = robot_mode;
+        shooter_ctx.gimbal_mode    = gimbal_mode;
+        shooter_ctx.is_aiming_now  = is_aiming_now;
+        shooter_ctx.control_source = control_source;
 
-        static bool f_key_last = false;
-        if (rc->key.map.F && !f_key_last) s_fric_level = 1;
-        f_key_last = rc->key.map.F;
-
-        static bool g_key_last = false;
-        if (rc->key.map.G && !g_key_last) s_fric_level = 2;
-        g_key_last = rc->key.map.G;
-
-        Shooter_Cmd_t shoot_cmd = {0};
-        shoot_cmd.use_referee_heat_limit = (control_source == CONTROL_SOURCE_VTM);
-
-        if (control_source == CONTROL_SOURCE_VTM)
+        Shooter_Control_Update(&shooter_ctx);
+        const Shooter_Output_t *shooter_output = Shooter_Get_Output();
+        if (shooter_output->dial_mode_cmd)
         {
-            if (s_fric_level == 1) shoot_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
-            else if (s_fric_level == 2) shoot_cmd.fric_mode = SHOOTER_MODE_HIGH_SPEED;
-        }
-        else
-        {
-            if (robot_mode == ROBOT_MODE_SHOOT || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_ENCODER))
-                shoot_cmd.fric_mode = SHOOTER_MODE_HIGH_SPEED;
-            else if (robot_mode == ROBOT_MODE_SHOOT_LOW || robot_mode == ROBOT_MODE_AIMING || robot_mode == ROBOT_MODE_M_AIMING || (robot_mode == ROBOT_MODE_BATTLE && gimbal_mode == GIMBAL_MODE_IMU))
-                shoot_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
+            Dial_Send_Mode_Command(&hfdcan1, shooter_output->dial_mode_cmd);
         }
 
-        uint8_t shooter_armed =
-            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_MID) ||
-            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_UP) ||
-            (rc->rc.s_left == DR16_SW_MID && rc->rc.s_right == DR16_SW_UP) ||
-            (robot_mode == ROBOT_MODE_BATTLE && (s_fric_level == 1 || s_fric_level == 2)) ||
-            (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_DOWN);
-        if (!shooter_armed) shoot_cmd.fric_mode = SHOOTER_MODE_OFF;
+        //CAN 统一发送
 
-        static bool mouse_l_last_state = false;
-        bool mouse_l_just_pressed = (rc->mouse.press_l && !mouse_l_last_state);
-        mouse_l_last_state = rc->mouse.press_l;
+        //云台: Yaw(瓴控) + Pitch(大疆)
+        const Gimbal_Output_t *gimbal_output = Gimbal_Get_Output();
+        LK_Send_Torque(&hfdcan1, gimbal_output->yaw_current);
+				
+        DJI_Motor_Send_Command(&hfdcan3, 0x1FF, gimbal_output->pitch_current, 0, 0, 0);
 
-        static bool mouse_m_last_state = false;
-        bool mouse_m_just_pressed = (rc->mouse.press_middle && !mouse_m_last_state);
-        mouse_m_last_state = rc->mouse.press_middle;
+        //发射: 摩擦轮(二级+一级) + 拨盘速度
+        DJI_Motor_Send_Command(&hfdcan2, 0x200, shooter_output->friction_current_outer_left, shooter_output->friction_current_outer_right, shooter_output->friction_current_outer_up, 0);
+        DJI_Motor_Send_Command(&hfdcan2, 0x1FF, shooter_output->friction_current_inner_left, shooter_output->friction_current_inner_right, shooter_output->friction_current_inner_up, 0);
 
-        if (rc->rc.wheel > 250 && robot_mode != ROBOT_MODE_AIMING)
+        Dial_Send_Speed(&hfdcan1, shooter_output->dial_target_speed);
+
+        //双板指令(含摩擦轮状态上报)
+        const Chassis_Output_t *chassis_output = Chassis_Get_Output();
+        Send_Chassis_Command(&hfdcan1, chassis_output->vx, chassis_output->vy, chassis_output->wz, chassis_output->mode, chassis_output->supercap, chassis_output->climb, chassis_output->led, chassis_output->shift, shooter_output->friction_report, is_base_locked, chassis_output->battle_mode);
+
+        //底盘UI(50ms 周期): 云台角度 + 摩擦轮转速
+        static uint32_t ui_send_cnt = 0;
+        if (++ui_send_cnt >= 50)
         {
-            shoot_cmd.fire_command = 1;
-        }
-        if (robot_mode == ROBOT_MODE_AIMING && Vision_IsOnline() && VisionData.is_tracking == 1 && VisionData.cmd_mode == 2)
-        {
-            shoot_cmd.fire_command = 1;
-        }
-        if (mouse_m_just_pressed) shoot_cmd.fire_command = 1;
-        if (is_aiming_now)
-        {
-            if (rc->mouse.press_l && VisionData.cmd_mode == 2) shoot_cmd.fire_command = 1;
-        }
-        else if (mouse_l_just_pressed)
-        {
-            shoot_cmd.fire_command = 1;
+            ui_send_cnt = 0;
+            Send_Chassis_UI_Data(&hfdcan1, gimbal_output->yaw_degree, gimbal_output->pitch_degree, shooter_output->friction_target_speed);
         }
 
-        Shooter_Control_Update(&shoot_cmd);
-        const Shooter_Output_t *shooter_out = Shooter_Get_Output();
-        if (shooter_out->dial_mode_cmd)
-        {
-            Dial_Send_Mode_Command(&hfdcan1, shooter_out->dial_mode_cmd);
-        }
-
-	    	const Gimbal_Output_t *gimbal_out = Gimbal_Get_Output();
-	    	LK_Send_Torque(&hfdcan1, gimbal_out->yaw_current);
-		    DJI_Motor_Send_Command(&hfdcan3, 0x1FF, gimbal_out->pitch_current, 0, 0, 0);
-
-
-        DJI_Motor_Send_Command(&hfdcan2, 0x200, shooter_out->friction_current_outer_left, shooter_out->friction_current_outer_right, shooter_out->friction_current_outer_up, 0);
-        DJI_Motor_Send_Command(&hfdcan2, 0x1FF, shooter_out->friction_current_inner_left, shooter_out->friction_current_inner_right, shooter_out->friction_current_inner_up, 0);
-		
-        uint8_t friction_report = 0;
-        if (shooter_out->friction_ready)
-        {
-            if (control_source == CONTROL_SOURCE_VTM)
-            {
-                friction_report = (shoot_cmd.fric_mode == SHOOTER_MODE_LOW_SPEED) ? 1 : 2;
-            }
-            else
-            {
-                friction_report = (shoot_cmd.fric_mode == SHOOTER_MODE_HIGH_SPEED) ? 1 : 2;
-            }
-        }
-        const Chassis_Output_t *chassis_out = Chassis_Get_Output();
-        Send_Chassis_Command(&hfdcan1, chassis_out->vx, chassis_out->vy, chassis_out->wz, chassis_out->mode, chassis_out->supercap, chassis_out->climb, chassis_out->led, chassis_out->shift, friction_report, is_base_locked, chassis_out->battle_mode);
-
-		    Dial_Send_Speed(&hfdcan1, shooter_out->dial_target_speed);
-		
-				static uint32_t ui_send_cnt = 0;
-				if (++ui_send_cnt >= 50) 
-				{
-						ui_send_cnt = 0;
-						
-						float yaw_deg = gimbal_out->yaw_degree; 
-						float pit_deg = gimbal_out->pitch_degree;
-
-						Send_Chassis_UI_Data(&hfdcan1, yaw_deg, pit_deg, shooter_out->friction_target_speed);
-				}
         last_robot_mode = robot_mode;
 }
 

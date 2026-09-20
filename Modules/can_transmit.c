@@ -7,6 +7,7 @@
  */
 #include "can_transmit.h"
 #include "bsp_can.h"
+#include "motor.h"
 
 #define LK_CURRENT_TO_RAW  (2048.0f / 16.5f)  // Amps -> -2048~2048
 
@@ -26,6 +27,9 @@
 #define TX_DIAL_MODE_ID   0x301
 
 #define LIMIT_16BIT(val)  ((val) > 32767 ? 32767 : ((val) < -32768 ? -32768 : (val)))
+
+//仅本文件使用: 把 x 限制在 [min,max] 区间内(原定义在 main.h)
+#define LIMIT_MIN_MAX(x,min,max) (x) = (((x)<=(min))?(min):(((x)>=(max))?(max):(x)))
 
 /**
  * @brief  将浮点数转换为无符号整数
