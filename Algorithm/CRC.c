@@ -8,8 +8,9 @@
  * @copyright Copyright (c) 2021
  * 
  */
+
 #include "CRC.h" 
- 
+
 const unsigned char MyCRC8Tab[]= 
 { 
 	0,94,188,226,97,63,221,131,194,156,126,32,163,253,31,65, 
@@ -110,9 +111,6 @@ uint16_t Get_CRC16_Check_Sum(const uint8_t *pchMessage, uint32_t dwLength, uint1
 }
 
 
-
-
-
 uint16_t crc16_ccitt_false(const uint8_t* data, size_t size) {
     uint16_t crc = 0xFFFFu;
     size_t index;
@@ -130,7 +128,4 @@ uint16_t crc16_ccitt_false(const uint8_t* data, size_t size) {
 }
 
 
-
 /*-----------------------------------file of end------------------------------*/
-
-

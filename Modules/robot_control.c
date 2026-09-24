@@ -2,11 +2,8 @@
  * @file robot_control.c
  * @brief 机器人总调度模块(Robot_Control_Loop)
  *
- * 1ms 控制循环的编排层:
- *   更新输入(遥控/IMU) -> 安全检查 -> 模式更新 -> 复位处理
- *   -> 云台/底盘/射击控制 -> 统一 CAN 输出
- * 具体业务逻辑在 gimbal_control / chassis_control / shooter_control 模块中,
- * 本文件只负责调度、模式相关状态与整机级流程。
+ * 整机级状态(模式、瞄准标志、LED 状态与各模式遥控增益)与最终的 CAN 发送
+ * 都集中在本文件; 具体控制计算在 gimbal/chassis/shooter 三个模块内完成。
  */
 
 #include "robot_control.h"
@@ -28,17 +25,17 @@
 
 #define ABS(x) ((x) > 0 ? (x) : -(x))
 
-//==================== 整机状态(仅本模块持有) ====================
+// ===== 整机状态(仅本模块持有) =====
 
 // 系统LED状态(device_task 通过 Robot_Get_Led_State 读取)
 static volatile LED_State_e led_state = LED_STATE_BOOTING;
 
-//==================== 瞄准状态 ====================
+// ===== 瞄准状态 =====
 
 // 是否处于瞄准中(自瞄或手动自瞄)
 static uint8_t is_aiming_now = 0;
 
-//==================== 控制参数 ====================
+// ===== 控制参数 =====
 
 static const float RAD_TO_DEG = 180.0f / PI;
 static const float DEG_TO_ENCODER = 8192.0f / 360.0f;
@@ -71,7 +68,7 @@ static const float VTM_SERVO_CLIMB = 100.0f;
 // 遥控数据指针(每周期刷新)
 static const RC_Data_t* rc;
 
-//==================== 对外接口 ====================
+// ===== 对外接口 =====
 
 // 初始化所有控制模块(All_Init 任务中调用)
 void Robot_Param_Init(void)
@@ -92,7 +89,7 @@ LED_State_e Robot_Get_Led_State(void)
     return led_state;
 }
 
-//==================== 内部辅助函数 ====================
+// ===== 内部辅助函数 =====
 
 // V键复位: Yaw归零到180度并复位SMC(失能与战斗模式下均可触发)
 static void Robot_Reset_Yaw_To_180(void)
@@ -121,7 +118,7 @@ static void Robot_Zero_Outputs(void)
 
 
 // 复位手势处理: 拨轮长按(仅OFF)触发整机复位, V键(OFF/BATTLE)触发Yaw归零;
-// 整机复位含500拍等待(替代原osDelay(500)), 返回1表示等待期, 主循环本拍直接返回
+// 整机复位含500拍等待(非阻塞), 返回1表示仍在等待期, 主循环本拍直接返回
 static uint8_t Robot_Handle_Reset(const RC_Data_t* rc, Robot_Mode_e robot_mode)
 {
     static uint32_t reset_trigger_timer = 0;   //拨轮长按计时
@@ -195,8 +192,6 @@ static uint8_t Robot_Handle_Reset(const RC_Data_t* rc, Robot_Mode_e robot_mode)
 }
 
 
-
-
 // 视觉目标解析: 弧度转角度, +180坐标系偏移, 按IMU yaw取最短路径;
 // 与当前世界目标偏差在 gate_deg 内才写入, 返回1=已写入
 static uint8_t Resolve_Vision_Aim_Target(const IMU_Data_t* imu_data, float gate_deg)
@@ -219,8 +214,6 @@ static uint8_t Resolve_Vision_Aim_Target(const IMU_Data_t* imu_data, float gate_
 
     return 0;
 }
-
-
 
 
 // 自瞄/手动自瞄公共主体: 视觉跟踪或右杆跟随 + Pitch限位 + 底盘移动(风格由参数决定)
@@ -306,54 +299,50 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 {
     Robot_Mode_e robot_mode = ROBOT_MODE_OFF;
     static Robot_Mode_e last_robot_mode = ROBOT_MODE_OFF;
-	
+
 
   	uint8_t is_base_hitting_now = 0;
-	
+
 	  uint8_t is_base_locked = 0;//已锁定基地
-	
+
 	  //更新获取遥控输入数据
 	  RC_Update();
     rc = RC_Get_Data();
-	
-	
+
+
 	  //IMU数据就绪
 	  if(imu_ready_flag == 0)
     {
         last_robot_mode = ROBOT_MODE_OFF; 
-			
+
 		  	Robot_Zero_Outputs();
         return; 
     }
-									
+
 
 				//模式选择: 由 robot_mode 模块根据遥控来源/上坎状态决定, 同时维护模式LED指示
 		Robot_Mode_Update(rc, control_source);
 		robot_mode = Robot_Mode_Get();
 		led_state = Robot_Mode_Get_Led_State();
-		
-		
-		
+
+
 		//RESET: 复位手势处理(拨轮长按整机复位/V键Yaw归零)
 		if(Robot_Handle_Reset(rc, robot_mode))
 		{
 			return;   //等待期: 本拍不执行后续模式调度与CAN发送
 		}
-		
-		
-		
+
+
 		//重新上电后对齐
     Gimbal_Handle_Motor_Reconnect(imu_data);
-			
 
-		
+
     //视觉离线
     if(!Vision_IsOnline()) 
     {
 			  Clear_Vision_Target(); 
     }
 
-		
 
 		is_aiming_now = 0;
     if(Vision_IsOnline() && VisionData.is_tracking == 1)
@@ -373,16 +362,16 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
             }
         }
     }
-		
-		
+
+
 		//陀螺仪首次对其
 		Gimbal_Sync_On_First_Ready(imu_data);
-		
-		
+
+
 		//云台模式切换
 		static bool is_base_shooting = false;
 		static bool key_B_last_state = false;
-		
+
 		if(robot_mode == ROBOT_MODE_BATTLE)
 		{
 			if(rc->key.map.B && !key_B_last_state)
@@ -392,8 +381,8 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 		}
 		else is_base_shooting = false;
 		key_B_last_state = rc->key.map.B;//更新按键状态
-		
-		
+
+
 		//由机器人模式翻译出目标云台模式(重初始化在模块内部完成)
 		Gimbal_Mode_e gimbal_mode = GIMBAL_MODE_IMU;
 		if(robot_mode == ROBOT_MODE_SHOOT || robot_mode == ROBOT_MODE_SHOOT_LOW || is_base_shooting)
@@ -404,30 +393,25 @@ void Robot_Control_Loop(const IMU_Data_t* imu_data)
 		{
 			gimbal_mode = GIMBAL_MODE_IMU;
 		}
-		
-		Gimbal_Set_Mode(gimbal_mode, imu_data);
-		
 
-			
-		
-		
+		Gimbal_Set_Mode(gimbal_mode, imu_data);
+
+
 		//重新使能
 		if(robot_mode != ROBOT_MODE_OFF && last_robot_mode == ROBOT_MODE_OFF)
 		{
 			Gimbal_On_Robot_Start(imu_data);
-			
+
 			Shooter_On_Robot_Start();
-			
+
 			Chassis_On_Robot_Start();
 		}
-		
-		
+
+
     //自瞄参数切换(内部做边沿检测)
     Gimbal_Set_Aiming(is_aiming_now);
-		
-		
-		
-		
+
+
 		static bool Key_E_last_state = false;
 		static bool Key_Q_last_state = false;
     static bool vtm_look_down = false;
@@ -477,21 +461,21 @@ switch(robot_mode)
 						if(last_robot_mode != ROBOT_MODE_OFF)
 						{	
 								Gimbal_On_Robot_Off();
-								
+
 								Shooter_On_Robot_Off();
-								
+
 								Chassis_On_Robot_Off();
-							
+
                 Robot_Zero_Outputs();
-							
+
 
 						}
-					
+
             if(Gimbal_Is_Initialized() && last_robot_mode == ROBOT_MODE_OFF)
             {
                 Gimbal_Sync_World_Target_To_IMU(imu_data);
             }
-						
+
 						Chassis_Set_Battle_Mode(BATTLE_OFF);
             break;
         }
@@ -517,8 +501,7 @@ switch(robot_mode)
             }
             else
             {
-								//云台控制
-								//雷达
+								//雷达基地打击(R键)
 						    if(rc->key.map.R)
 						    {
 										uint8_t base_aim_ret = Robot_Handle_Base_Aim(imu_data);
@@ -711,16 +694,16 @@ switch(robot_mode)
 		 	Chassis_Zero_Turn();
 		 	Gimbal_Set_World_Yaw(imu_data->yaw_angle);
 		 }
-		 
-		 
+
+
 		//雷达辅吊云台参数切换(内部做边沿检测)
 		Gimbal_Set_Base_Hitting(is_base_hitting_now);
-		 
- 
+
+
     //云台闭环计算(目标角已由上方各模式写入模块)
     Gimbal_Set_Active(robot_mode != ROBOT_MODE_CHASSIS_ONLY && robot_mode != ROBOT_MODE_OFF);
     Gimbal_Control_Update(imu_data);
-		
+
         //射击: 组装系统上下文并交给 Shooter 模块(输入翻译/射击决策在模块内部完成)
         Shooter_Context_t shooter_ctx;
         shooter_ctx.rc             = rc;
@@ -741,7 +724,7 @@ switch(robot_mode)
         //云台: Yaw(瓴控) + Pitch(大疆)
         const Gimbal_Output_t *gimbal_output = Gimbal_Get_Output();
         LK_Send_Torque(&hfdcan1, gimbal_output->yaw_current);
-				
+
         DJI_Motor_Send_Command(&hfdcan3, 0x1FF, gimbal_output->pitch_current, 0, 0, 0);
 
         //发射: 摩擦轮(二级+一级) + 拨盘速度
@@ -764,6 +747,3 @@ switch(robot_mode)
 
         last_robot_mode = robot_mode;
 }
-
-
-

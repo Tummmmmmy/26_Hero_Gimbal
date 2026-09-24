@@ -1,3 +1,10 @@
+/**
+ * @file remote_control.h
+ * @brief 遥控器输入统一接口
+ *
+ * 定义统一的遥控数据结构 RC_Data_t 与控制源枚举, 屏蔽 DR16/VT03 差异。
+ */
+
 #ifndef REMOTE_CONTROL_H
 #define REMOTE_CONTROL_H
 
@@ -8,7 +15,7 @@
 //遥控杆量到归一化[-1,1]的缩放系数(杆量范围约+-660)
 #define RC_TO_ONE (1.0f / 660.0f)
 
-//统一的遥控器数据结构体
+/** @brief 统一的遥控器数据结构体(DR16 / VT03 共用) */
 typedef struct {
 
     struct {
@@ -47,8 +54,7 @@ typedef struct {
 } RC_Data_t;
 
 
-
-//遥控控制源
+/** @brief 遥控控制源 */
 typedef enum {
     CONTROL_SOURCE_NONE,  //全部离线
     CONTROL_SOURCE_DR16,  //DR16在线
@@ -56,13 +62,12 @@ typedef enum {
 } ControlSource_e;
 
 
-
 extern volatile ControlSource_e control_source;
 
-//刷新遥控器状态
+/** @brief 刷新遥控器状态 */
 void RC_Update(void);         
 
-//获取最终处理好的数据指针
+/** @brief 获取最终处理好的数据指针 */
 const RC_Data_t* RC_Get_Data(void);
 
 #endif

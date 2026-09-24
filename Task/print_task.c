@@ -2,7 +2,7 @@
  * @file print_task.c
  * @brief 10ms 调试打印任务(Print_Entry_Task)
  *
- * 发射器弹速统计/摩擦轮转速等吊射 VOFA 上位机数据
+ * 周期向 VOFA 上位机打印吊射相关数据(弹速统计、摩擦轮转速等)。
  */
 
 #include "print_task.h"

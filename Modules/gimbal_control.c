@@ -1,9 +1,6 @@
 /**
  * @file gimbal_control.c
- * @brief ÔÆÌ¨¿ØÖÆÄ£¿é£ºYaw/Pitch ±Õ»·¿ØÖÆ¡¢×ÔÃé/»ùµØ´ò»÷²ÎÊıÇĞ»»ÓëÄ¿±ê½Ç¹ÜÀí
- *
- * ÓÉ main.c µÄ±ÈÈüÑéÖ¤Âß¼­ÕûÀí¶øÀ´£»ÔÆÌ¨µç»ú¡¢SMC/PID ¿ØÖÆÆ÷ÓëÄ¿±ê½Ç×´Ì¬
- * ¾ùÊÕ¹é±¾Ä£¿éË½ÓĞ£¬Robot_Control_Loop Ö»¸ºÔğ·­ÒëÒ£¿Ø/ÊÓ¾õÖ¸Áî²¢Í¨¹ı½Ó¿ÚÏÂ´ï¡£
+ * @brief ÔÆÌ¨¿ØÖÆÊµÏÖ£ºYaw/Pitch ±Õ»·¡¢×ÔÃé/»ùµØ´ò»÷²ÎÊıÓëÄ¿±ê½Ç¹ÜÀí
  */
 
 #include "cmsis_os.h"
@@ -37,7 +34,7 @@ static bool base_hitting = false;
 static Gimbal_Output_t output;
 static Gimbal_Debug_Data_t debug;
 
-// ===== ¿ØÖÆ²ÎÊı=====
+// ===== ¿ØÖÆ²ÎÊı =====
 
 //Yaw
 //ËÙ¶È»·
@@ -61,7 +58,7 @@ static const float gimbal_yaw_epsilon = 0.0f;    // epsilon: µÈËÙÇ÷½ü (¿Ë·ş¾²Ä¦²
 static const float gimbal_yaw_beta = 0.0f;       // beta: ¸ÉÈÅ¹Û²âÆ÷ÔöÒæ £¬²»¹»´ó¹Ò²»×¡
 static const float gimbal_yaw_boundary = 0.5f;   // boundary: ±ß½ç²ã£¬·À¶¶ 
 static const float gimbal_yaw_out_max = 10.0f;    // out_max: ×î´óÊä³ö                       10
- 
+
 //SMC_Vision
 static float gimbal_yaw_c_vision = 3.5f;          // c: »¬Ä£ÃæÏµÊı £¬¾ö¶¨»ØÖĞ¿ìÂı        //1
 static float gimbal_yaw_k_exp_vision = 0.75f;      // k_exp: Ö¸ÊıÇ÷½ü £¬¾ö¶¨³öÁ¦´óĞ¡      //0.3
@@ -69,9 +66,6 @@ static const float gimbal_yaw_epsilon_vision = 0.0f;    // epsilon: µÈËÙÇ÷½ü (¿Ë
 static const float gimbal_yaw_beta_vision = 0.0f;       // beta: ¸ÉÈÅ¹Û²âÆ÷ÔöÒæ £¬²»¹»´ó¹Ò²»×¡
 static const float gimbal_yaw_boundary_vision = 0.5f;   // boundary: ±ß½ç²ã£¬·À¶¶
 static const float gimbal_yaw_out_max_vision = 5.0f;    // out_max: ×î´óÊä³ö
-
-
-
 
 
 //Pitch
@@ -88,7 +82,6 @@ static const float gimbal_pitch_angle_ki_encoder = 0.0f;
 static const float gimbal_pitch_angle_kd_encoder = 0.0f;
 static const float gimbal_pitch_angle_Integral_Limit_encoder = 50.0f;
 static const float gimbal_pitch_angle_MaxOutput_encoder = 400.0f;//×î´óÄ¿±êËÙ¶ÈRPM
-
 
 
 //SMC
@@ -156,7 +149,7 @@ static void Gimbal_Angle_Update(Motor_Controller *motor, float encoder_range)
         motor->mechanical_degree = (float)motor->feedback.angle * (360.0f / encoder_range);
         return;
     }
-    
+
     int32_t angle_diff = (int32_t)motor->feedback.angle - (int32_t)motor->last_feedback_angle;
 
     //¹ıÁã´¦Àí

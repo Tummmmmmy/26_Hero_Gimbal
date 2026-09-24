@@ -1,3 +1,10 @@
+/**
+ * @file bsp_DR16.c
+ * @brief DR16 接收机驱动
+ *
+ * UART5 + DMA 接收 DBUS 帧, 解析遥控杆量/拨杆/按键并做在线超时判断。
+ */
+
 #include "bsp_DR16.h"
 #include "usart.h"
 #include "string.h"
@@ -13,7 +20,6 @@ static uint32_t dr16_last_update_tick = 0; //上一次接收时间
 __attribute__((aligned(32))) static uint8_t sbus_rx_buf[DR16_RX_BUF_NUM]; 
 
 
-
 /**
   * @brief  遥控器初始化
   */
@@ -21,7 +27,6 @@ void DR16_Init(void)
 {
     HAL_UARTEx_ReceiveToIdle_DMA(&DR16_UART_HANDLE, sbus_rx_buf, DR16_RX_BUF_NUM);
 }
-
 
 
 /**
@@ -34,21 +39,19 @@ bool DR16_IsOnline(void)
 }
 
 
-
-
 /**
   * @brief  获取 DR16 最新数据
   */
 const DR16_Data_t* DR16_Get_Data(void)
 {
     DR16_Data_t temp_rc;
-    
+
     //从队列异步提取
     if(osMessageQueueGet(rcQueueHandle, &temp_rc, NULL, 0) == osOK)
     {
         dr16_data = temp_rc;
     }
-		
+
 		//离线归零
     if(!DR16_IsOnline())
 	  {
@@ -56,10 +59,9 @@ const DR16_Data_t* DR16_Get_Data(void)
         memset(&dr16_data.mouse, 0, sizeof(dr16_data.mouse));
         memset(&dr16_data.key, 0, sizeof(dr16_data.key));
 		}
-		
+
     return &dr16_data ;
 }
-
 
 
 /**
@@ -68,14 +70,14 @@ const DR16_Data_t* DR16_Get_Data(void)
 static void sbus_to_rc(volatile const uint8_t *sbus_buf)
 {
     DR16_Data_t rc_raw = {0}; 
-	
+
     rc_raw.rc.ch[0] = (sbus_buf[0] | (sbus_buf[1] << 8)) & 0x07ff;
     rc_raw.rc.ch[1] = ((sbus_buf[1] >> 3) | (sbus_buf[2] << 5)) & 0x07ff;
     rc_raw.rc.ch[2] = ((sbus_buf[2] >> 6) | (sbus_buf[3] << 2) | (sbus_buf[4] << 10)) & 0x07ff;
     rc_raw.rc.ch[3] = ((sbus_buf[4] >> 1) | (sbus_buf[5] << 7)) & 0x07ff;
     rc_raw.rc.s[0]  = ((sbus_buf[5] >> 4) & 0x0003);
     rc_raw.rc.s[1]  = ((sbus_buf[5] >> 4) & 0x000C) >> 2;
-    
+
     rc_raw.mouse.x = sbus_buf[6] | (sbus_buf[7] << 8);
     rc_raw.mouse.y = sbus_buf[8] | (sbus_buf[9] << 8);
     rc_raw.mouse.z = sbus_buf[10] | (sbus_buf[11] << 8);
@@ -89,13 +91,13 @@ static void sbus_to_rc(volatile const uint8_t *sbus_buf)
   	{
         rc_raw.rc.ch[i] -= DR16_CH_VALUE_OFFSET;
     }
-		
+
     for(int i=0; i<5; i++)
     {
         if(rc_raw.rc.ch[i] > 660)  rc_raw.rc.ch[i] = 660;
         if(rc_raw.rc.ch[i] < -660) rc_raw.rc.ch[i] = -660;
     }
-		
+
 		//死区处理
     if(ABS(rc_raw.rc.ch[0]) <= 10) 
     {
@@ -111,10 +113,10 @@ static void sbus_to_rc(volatile const uint8_t *sbus_buf)
 	  {
         memset(&rc_raw, 0, sizeof(rc_raw));
     }
-    
+
     dr16_last_update_tick = osKernelGetTickCount();//更新时间戳
 
-		
+
     //FIFO环形推入队列
     if(osMessageQueueGetCount(rcQueueHandle) > 0)
   	{
@@ -123,7 +125,6 @@ static void sbus_to_rc(volatile const uint8_t *sbus_buf)
     }
     osMessageQueuePut(rcQueueHandle, &rc_raw, 0, 0);
 }
-
 
 
 //接收回调
@@ -135,10 +136,7 @@ void DR16_RX_Callback_Handler(void)
 }
 
 
-
 void DR16_Reset(void)
 {
 	HAL_UARTEx_ReceiveToIdle_DMA(&DR16_UART_HANDLE, sbus_rx_buf, DR16_RX_BUF_NUM);
 }
-
-

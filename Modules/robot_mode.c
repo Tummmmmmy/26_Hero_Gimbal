@@ -3,7 +3,6 @@
  * @brief 机器人工作模式选择模块
  *
  * 根据遥控来源(DR16/VTM)与底盘上坎状态决定当前工作模式,
- * 并维护模式对应的 LED 指示。只负责“选模式”, 不执行控制与 CAN 发送。
  */
 
 #include "robot_mode.h"
@@ -17,11 +16,6 @@ static Robot_Mode_e mode = ROBOT_MODE_OFF;
 // 模式对应的LED指示(无控制源时保持上一次)
 static LED_State_e mode_led = LED_STATE_BOOTING;
 
-/**
- * @brief 更新机器人工作模式
- * @param rc 遥控数据
- * @param control_source 当前控制源(VTM/DR16)
- */
 void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
 {
     //VT03 拨杆选择

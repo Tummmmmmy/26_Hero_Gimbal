@@ -1,3 +1,8 @@
+/**
+ * @file bsp_VT03.h
+ * @brief VT03 图传遥控驱动接口与帧格式定义
+ */
+
 #ifndef BSP_VT03_H
 #define BSP_VT03_H
 
@@ -46,17 +51,17 @@ typedef struct
             bool press_S : 1;
             bool press_A : 1;
             bool press_D : 1;
-					
+
             bool press_Shift : 1;
             bool press_Ctrl : 1;
-					
+
             bool press_Q : 1;
             bool press_E : 1;
             bool press_R : 1;
             bool press_F : 1;
             bool press_G : 1;
             bool press_Z : 1;
-					
+
             bool press_X : 1;
             bool press_C : 1;
             bool press_V : 1;
@@ -67,7 +72,6 @@ typedef struct
 	}data;
 	bool is_online;           //在线状态标志位
 } VT03_Receive_t;
-
 
 
 //VT03初始化
@@ -84,5 +88,5 @@ void VT03_RX_Callback_Handler(uint16_t Size);
 
 //串口错误复位与重启函数
 void VT03_Reset(void);
-	
+
 #endif

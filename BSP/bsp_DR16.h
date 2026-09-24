@@ -1,3 +1,8 @@
+/**
+ * @file bsp_DR16.h
+ * @brief DR16 接收机驱动接口与 DBUS 数据结构
+ */
+
 #ifndef BSP_DR16_H
 #define BSP_DR16_H
 
@@ -34,7 +39,7 @@ typedef struct
         int16_t ch[5]; // 0-3: 摇杆, 4: 拨轮
         uint8_t s[2];  // 0: 右拨杆, 1: 左拨杆
     } rc;
-    
+
     struct
     {
         int16_t x;
@@ -43,14 +48,13 @@ typedef struct
         uint8_t press_l;
         uint8_t press_r;
     } mouse;
-    
+
     struct
     {
         uint16_t v;
     } key;
 		bool is_online;          // 在线状态标志位
 } DR16_Data_t;
-
 
 
 extern osMessageQueueId_t rcQueueHandle;

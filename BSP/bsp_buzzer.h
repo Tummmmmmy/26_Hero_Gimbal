@@ -1,3 +1,8 @@
+/**
+ * @file bsp_buzzer.h
+ * @brief ·äÃùÆ÷Çý¶¯½Ó¿Ú
+ */
+
 #ifndef BSP_BUZZER_H
 #define BSP_BUZZER_H
 

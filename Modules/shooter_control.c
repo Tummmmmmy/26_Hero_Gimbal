@@ -1,8 +1,6 @@
 /**
  * @file shooter_control.c
  * @brief 射击控制模块：摩擦轮、拨盘、弹速统计与热量管理
- *
- * 由 main.c 的比赛验证逻辑整理而来；发射机构状态与电机对象均已收归本模块私有。
  */
 
 #include "main.h"
@@ -16,7 +14,7 @@
 #include <math.h>
 #include <string.h>
 
-// 射击模块私有状态（全部 static，不对外暴露内部实现）
+// 射击模块私有状态(全部 static, 仅本模块可见)
 // ===== 发射机构私有类型 =====
 typedef enum
 {
@@ -179,7 +177,7 @@ static float uint_to_float(int x_int, float x_min, float x_max, int bits)
 }
 
 
-// 与 main.c 保持一致，避免文件间宏重复
+// 取绝对值
 #define ABS(x) ((x) > 0 ? (x) : -(x))
 
 // 摩擦轮目标转速与线速度比例
@@ -234,8 +232,6 @@ static uint8_t Check_Friction_Ready(void)
 }
 
 
-
-
 //弹速自适应控制参数
 #define SPEED_TARGET_HIGH      16.3f  //弹速上限(超过此值减速)
 #define SPEED_TARGET_LOW       16.1f  //弹速下限(低于此值加速)
@@ -264,7 +260,6 @@ static uint32_t shoot_seq_cnt = 0; //记录一轮射击打到了第几发
 static float pending_speed = 0.0f; //暂存上一发的弹速
 
 
-
 //统计弹速数据
 static void process_new_bullet_speed(float new_speed)
 {
@@ -287,10 +282,10 @@ static void process_new_bullet_speed(float new_speed)
         if (speed_window[i] > max_speed) max_speed = speed_window[i];
         if (speed_window[i] < min_speed) min_speed = speed_window[i];
     }
-    
+
     bullet_speed_avg = sum / valid_count;
     bullet_speed_range = max_speed - min_speed;
-    
+
     //计算方差
     float variance_sum = 0.0f;
     for (uint8_t i = 0; i < valid_count; i++)
@@ -301,30 +296,23 @@ static void process_new_bullet_speed(float new_speed)
 }
 
 
-
-
-/**
-  * @brief  重置弹道统计数据和自适应补偿
-  */
 void Shooter_Reset_Stats(void)
 {
     //清空滑动窗口数组
     memset(speed_window, 0, sizeof(speed_window));
-    
+
     //重置计数器和索引
     total_shot_count = 0;
     shoot_seq_cnt = 0;
-    
+
     //清空统计结果
     bullet_speed_avg = 0.0f;
     bullet_speed_range = 0.0f;
     bullet_speed_variance = 0.0f;
-    
+
     high_speed_count = 0;
     low_speed_count = 0;
 }
-
-
 
 
 //弹速自调整
@@ -335,7 +323,7 @@ static void Bullet_Speed_Adaptive_Control(float latest_speed)
     {
         high_speed_count++;
         low_speed_count = 0; 
-        
+
         if(high_speed_count >= 2) 
         {
             auto_speed_offset -= RPM_ADJUST_STEP;
@@ -347,7 +335,7 @@ static void Bullet_Speed_Adaptive_Control(float latest_speed)
     {
         low_speed_count++;
         high_speed_count = 0; 
-        
+
         if(low_speed_count >= 2) 
         {
             auto_speed_offset += RPM_ADJUST_STEP;
@@ -366,16 +354,13 @@ static void Bullet_Speed_Adaptive_Control(float latest_speed)
 }
 
 
-
-
-
 static void Bullet_Speed_Adaptive_Process(void)
 {
     if(initial_speed != last_referee_speed && initial_speed > 11.0f && initial_speed < 17.0f)
     {
 			 shoot_seq_cnt++;
-			
-			
+
+
         if(shoot_seq_cnt > 2) 
         {
             if(!robot_off)
@@ -387,26 +372,22 @@ static void Bullet_Speed_Adaptive_Process(void)
             }
         }
 				pending_speed = initial_speed;
-				
+
         last_referee_speed = initial_speed;
     }
-    
+
     if(robot_off)
     {
         auto_speed_offset = 0.0f;
         high_speed_count = 0;
         low_speed_count = 0;
-			
+
 			  shoot_seq_cnt = 0; 
     }
 }
 
 
-
-
-/**
-  * @brief  拨盘电机重新上电处理
-  */
+// 拨盘电机重新上线后的恢复处理
 static void Dial_Recover_Process(void)
 {
     static uint32_t dial_power_on_time = 0;
@@ -418,7 +399,7 @@ static void Dial_Recover_Process(void)
     {
         dial_was_offline = true;
         dial_recover_step = 0;
-        
+
         shooter_controller.state = SHOOTER_OFF;
         shooter_controller.single_shot_fired_flag = 0;
         shooter_controller.continuous_fire_timer = 0;
@@ -443,14 +424,13 @@ static void Dial_Recover_Process(void)
             if(xTaskGetTickCount() - dial_power_on_time > 200)
             {
                 dial_enable_pending = 1;
-                
+
                 dial_was_offline = false;
                 dial_recover_step = 0;
             }
         }
     }
 }
-
 
 
 #define USE_AUTO_CALIBRATION 1 //1:开启撞限位校准, 0:关闭校准(当前位置为零点)
@@ -541,16 +521,16 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
     uint32_t now = xTaskGetTickCount();
     use_referee_heat_limit = (ctx->control_source == CONTROL_SOURCE_VTM);
     robot_off = (ctx->robot_mode == ROBOT_MODE_OFF);
-	
+
 	  //更新热量
     Shooter_Update_Heat();
-	
+
 	  //检测是否发弹
     Shooter_Check_Real_Fire();
-	
+
 	  //拨盘电机重新上电处理
 	  Dial_Recover_Process();
-	
+
     //本周期输入翻译: F/G 键边沿、档位、开火条件(模块内部完成)
     Shooter_Update_Cmd_From_Input(ctx);
     uint8_t fire_command = fric_cmd.fire_command;
@@ -565,8 +545,8 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 
         last_fric_mode = fric_cmd.fric_mode;
     }
-		
-		
+
+
 	  //卡弹检测
     if(shooter_controller.state != SHOOTER_OFF && shooter_controller.state != SHOOTER_JAMMED && shooter_controller.state != SHOOTER_CALIBRATING)
     {
@@ -586,7 +566,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
                 shooter_controller.jam_detect_timer = 0;
             }
         }
-        
+
 				//卡弹
         if(shooter_controller.jam_detect_timer > DIAL_JAM_DETECT_THRESHOLD)
         {
@@ -604,7 +584,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
     {
         if(fric_cmd.fric_mode != SHOOTER_MODE_OFF)
         {
-					
+
 #if USE_AUTO_CALIBRATION 
             //如果还没校准过
             if(shooter_controller.is_calibrated == 0)
@@ -624,7 +604,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
             {
 								//防跳变
 								float dial_error = dial_motor.current_total_angle_rad - shooter_controller.dial_last_normal_rad;
-								
+
 								while(dial_error > DIAL_ONE_SHOOT_ENCODER - 0.2f) 
 								{
 										shooter_controller.dial_last_normal_rad += DIAL_ONE_SHOOT_ENCODER;
@@ -635,7 +615,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 										shooter_controller.dial_last_normal_rad -= DIAL_ONE_SHOOT_ENCODER;
 										dial_error += DIAL_ONE_SHOOT_ENCODER;
 								}
-								
+
 							  shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad;
                 shooter_controller.state = SHOOTER_READY;
             }
@@ -645,8 +625,8 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
             shooter_controller.state = SHOOTER_OFF;
         }
     }
-		
-		
+
+
     switch(shooter_controller.state)
     {
         case SHOOTER_OFF:
@@ -657,7 +637,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
             shooter_controller.jam_detect_timer = 0;
             break;
         }
-				
+
         case SHOOTER_CALIBRATING:
         {
             shooter_controller.friction_target_speed = 0.0f;
@@ -725,16 +705,16 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 								{
 										//直接设目标打第一发
 										shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad + DIAL_ONE_SHOOT_ENCODER;
-										
+
 										//先扣热量，重置检测
 										shooter_predict_heat += HERO_HEAT_PER_SHOT;
 										current_shot_status = SHOT_NOT_DETECTED;
-									
+
 								  	shooter_controller.single_shot_fired_flag = 1;
-									
+
 										shooter_controller.state = SHOOTER_SINGLE_SHOT;
-									
-									
+
+
 									  //记录发射时间
                     last_shoot_time = now;
 								}
@@ -750,7 +730,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
         {
             shooter_controller.friction_target_speed = fric_param.target_speed;
             shooter_controller.friction_linear_ratio = fric_param.linear_ratio;
-					
+
             //任务完成判断
             if(fabs(shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad) < 0.2f)
             {
@@ -758,7 +738,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
                 {
                     shooter_controller.dial_last_normal_rad = shooter_controller.dial_target_rad;
                 }
-								
+
 							  //如果空枪，退热量
                 if(current_shot_status == SHOT_NOT_DETECTED)
 								{
@@ -770,7 +750,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
             }
             break;
         }
-				
+
 				//卡弹处理
         case SHOOTER_JAMMED:
         {
@@ -798,39 +778,36 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
                 if(shooter_controller.jam_detect_timer > DIAL_JAM_WAIT_TIME)
                 {
                     shooter_controller.dial_target_rad = shooter_controller.dial_last_normal_rad + DIAL_ONE_SHOOT_ENCODER;
-                    
+
                     shooter_controller.jam_detect_timer = 0;
                     shooter_controller.state = SHOOTER_SINGLE_SHOT;
                 }
             }
-						
+
 						//卡弹处理超时
 						if(shooter_controller.jam_timeout_timer > 2000) 
             {
                 shooter_controller.state = SHOOTER_OFF;
 						  	shooter_controller.single_shot_fired_flag = 0;
             }
-						
+
             break;
         }
     }
-		
-		
+
+
 		if(shooter_controller.friction_target_speed > 1000.0f)
     {
 					//二级目标转速
 					float target_rpm_outer = shooter_controller.friction_target_speed;
-					
+
 					//弹速自调整
 					Bullet_Speed_Adaptive_Process();
-					
-			//		float friction_final_rpm = friction_base_rpm + auto_speed_offset;
-					
-					
+
 					//一级目标转速
 					float target_rpm_inner = target_rpm_outer * (WHEEL_RADIUS_OUTER / WHEEL_RADIUS_INNER) * shooter_controller.friction_linear_ratio;
 
-					
+
 					//摩擦轮目标转速与目标电流
 					for (uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
 					{
@@ -855,13 +832,13 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 						motor->pid_speed.pre_error = 0.0f;
 					}
 			}
-		
-		
-		//摩擦轮是否开启
+
 		// 摩擦轮是否已转起来（供主循环上报底盘档位时使用）
 		output.friction_ready = (Check_Friction_Ready() == 1 && shooter_controller.friction_target_speed > 200.0f) ? 1 : 0;
- 
-		
+
+			
+			
+			
 //		//MIT力矩控制
 //    if(shooter_controller.state != SHOOTER_OFF)
 //    {
@@ -885,9 +862,9 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
         {
 						//当前拨盘误差
 						float dial_error = shooter_controller.dial_target_rad - dial_motor.current_total_angle_rad;
-						
+
 						float max_error = 2.2f * DIAL_ONE_SHOOT_ENCODER; 
-					
+
 						//如果误差离谱
 						if(fabs(dial_error) > max_error)
 						{
@@ -901,7 +878,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 								shooter_controller.jam_process_step = 0;
 						}
 				}
-			
+
         //位置环
         dial_motor.target_speed = PID_Calculate(&dial_motor.pid_angle, shooter_controller.dial_target_rad, dial_motor.current_total_angle_rad);
 
@@ -910,7 +887,7 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
         {
             dial_motor.target_speed = DIAL_HOMING_SPEED; 
         }
-				
+
 				//如果摩擦轮没转拨盘不转
         if(shooter_controller.state != SHOOTER_CALIBRATING && 
             shooter_controller.state != SHOOTER_JAMMED)
@@ -961,8 +938,6 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 }
 
 
-
-
 //检测是否发射弹丸
 static void Shooter_Check_Real_Fire(void) 
 {
@@ -978,16 +953,16 @@ static void Shooter_Check_Real_Fire(void)
         is_spin_up_done = 0;
         return; 
     }
-		
+
     //计算平均速度
     float s1_avg_speed = (ABS(friction_motor_inner_left.feedback.actual_speed) + 
                           ABS(friction_motor_inner_right.feedback.actual_speed) + 
                           ABS(friction_motor_inner_up.feedback.actual_speed)) / 3.0f;
-    
+
     float s2_avg_speed = (ABS(friction_motor_outer_left.feedback.actual_speed) + 
                           ABS(friction_motor_outer_right.feedback.actual_speed) + 
                           ABS(friction_motor_outer_up.feedback.actual_speed)) / 3.0f;
-    
+
 
     if(is_spin_up_done == 0)
     {
@@ -1010,30 +985,27 @@ static void Shooter_Check_Real_Fire(void)
 }
 
 
-
-
-
 //热量模拟
 static void Shooter_Update_Heat(void)
 {
     uint32_t current_time = xTaskGetTickCount();
-    
+
     static uint32_t last_time = 0;//上一次的时间
-    
+
     if(last_time == 0) 
     {
         last_time = current_time;
         return;
     }
-    
+
     uint32_t dt = current_time - last_time;
     last_time = current_time;
 
     if(dt == 0) return;
-		
+
 
     float real_heat = (float)shooter_heat;//裁判系统给的当前真实热量
-		
+
 		float cooling_rate = 0.0f;
 		if(use_referee_heat_limit) 
 		{
@@ -1043,21 +1015,21 @@ static void Shooter_Update_Heat(void)
 		{
 				cooling_rate = 10000.0f;//(float)shooter_cooling;
 		}
-		
-    
+
+
     //计算这段时间内的冷却量
     float cooling_amount = cooling_rate * ((float)dt / 1000.0f);
 
     if(shooter_predict_heat > 0.0f) shooter_predict_heat -= cooling_amount;
     if(shooter_predict_heat < 0.0f) shooter_predict_heat = 0.0f;
-		
+
     //同步校准
     if(real_heat > shooter_predict_heat) 
     {
         shooter_predict_heat = real_heat;
     }
-		
-		
+
+
     if(shooter_controller.state != SHOOTER_SINGLE_SHOT && (current_time - last_shoot_time > 500))
     {
         if(shooter_predict_heat > real_heat + 30.0f)
@@ -1066,8 +1038,6 @@ static void Shooter_Update_Heat(void)
         }
     }
 }
-
-
 
 
 //是否允许开火
@@ -1339,7 +1309,6 @@ void Shooter_Check_Motors_Online(uint32_t current_tick)
         Shooter_Check_Motor_Online(friction_motors[i].motor, current_tick);
     }
 }
-
 
 
 const Shooter_Debug_Data_t* Shooter_Get_Debug_Data(void)

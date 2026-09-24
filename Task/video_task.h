@@ -1,3 +1,8 @@
+/**
+ * @file video_task.h
+ * @brief 图传桥接任务接口
+ */
+
 #ifndef VIDEO_TASK_H
 #define VIDEO_TASK_H
 

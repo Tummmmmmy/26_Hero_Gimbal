@@ -1,3 +1,10 @@
+/**
+ * @file Vision_can.c
+ * @brief [废弃] 早期 CAN 视觉通信实现
+ *
+ * 已被 vision_link(USB CDC) 取代, 未加入 Keil 工程编译, 仅保留备查。
+ */
+
 #include "vision_can.h"
 #include "string.h"
 #include "cmsis_os.h"
@@ -69,8 +76,6 @@ void Vision_Send_IMU(FDCAN_HandleTypeDef *hfdcan)
 }
 
 
-
-
 /**
  * @brief  通过CAN发送状态信息 (直接发送版)
  */
@@ -103,12 +108,3 @@ void Vision_Send_Status(FDCAN_HandleTypeDef *hfdcan, float bullet_speed, uint8_t
         HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &tx_header, tx_data);
     }
 }
-
-
-
-
-
-
-
-
-

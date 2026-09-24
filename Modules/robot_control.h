@@ -13,13 +13,13 @@
 #include "INS_task.h"
 #include "robot_types.h"
 
-// 上电初始化所有控制模块(All_Init 任务中调用)
+/** @brief 上电初始化所有控制模块 */
 void Robot_Param_Init(void);
 
-// 1ms 控制主循环(Gimbal_Control_task 调用)
+/** @brief 1ms 控制主循环 */
 void Robot_Control_Loop(const IMU_Data_t* imu_data);
 
-// 系统LED状态(device_task 读取)
+/** @brief 获取系统LED状态 */
 LED_State_e Robot_Get_Led_State(void);
 
 #endif

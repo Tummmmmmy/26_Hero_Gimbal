@@ -1,14 +1,8 @@
 /**
  * @file chassis_control.c
  * @brief 底盘控制模块实现
- *
- * 英雄云台板底盘侧状态全部收拢在本模块:
- * - 底盘输出快照 output(由主循环统一 CAN 发送)
- * - 底盘跟随PID与斜坡滤波器
- * - 上坎状态机(CLIMB_MODE_*)与上坎/LED指令
- * - 0x304 底盘反馈解码(颜色/裁判在线/裁判数据)
- * 模块不直接发送 CAN, 不依赖 gimbal 模块内部状态。
  */
+
 #include "chassis_control.h"
 #include "main.h"               // PI
 #include "pid.h"
@@ -122,7 +116,7 @@ void Chassis_On_Robot_Off(void)
 //上坎状态机与上坎/LED指令更新
 void Chassis_Update_Climb(const RC_Data_t* rc, Robot_Mode_e robot_mode, bool e_key_just_pressed)
 {
-    //小陀螺标志每个控制周期复位(原 key_shift 局部变量语义)
+    //小陀螺标志每个控制周期复位
     output.shift = 0;
 
     if(robot_mode == ROBOT_MODE_BATTLE)

@@ -1,3 +1,8 @@
+/**
+ * @file ws2812.h
+ * @brief WS2812 灯带驱动接口
+ */
+
 #ifndef BSP_WS2812_H
 #define BSP_WS2812_H
 

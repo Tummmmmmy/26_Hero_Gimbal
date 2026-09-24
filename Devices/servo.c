@@ -1,3 +1,10 @@
+/**
+ * @file servo.c
+ * @brief 舵机 PWM 驱动
+ *
+ * 把目标角度换算成 PWM 脉宽, 驱动图传低头舵机与磁铁舵机。
+ */
+
 #include "servo.h"
 #include "tim.h"
 
@@ -14,25 +21,12 @@
 void Bsp_Servo_Init(void)
 {
     HAL_TIM_PWM_Start(VTM_TIM_HANDLE, VTM_TIM_CHANNEL);
-    
+
     //初始化舵机角度
     Servo_Set_Angle(VTM_TIM_HANDLE, VTM_TIM_CHANNEL, VTM_SERVO_CENTER);
-	
-	
-//	HAL_TIM_PWM_Start(MAG_TIM_HANDLE, MAG_TIM_CHANNEL);
-//	
-//	Magnifier_Servo_Control(MAG_OFF); 
 }
 
 
-
-
-/**
- * @brief  通用舵机角度控制函数 (核心换算)
- * @param  htim: 定时器句柄 (如 &htim2)
- * @param  Channel: 定时器通道 (如 TIM_CHANNEL_1)
- * @param  angle: 目标角度 (0 ~ SERVO_MAX_ANGLE)
- */
 void Servo_Set_Angle(TIM_HandleTypeDef *htim, uint32_t Channel, float angle)
 {
     //角度安全限幅
@@ -45,22 +39,15 @@ void Servo_Set_Angle(TIM_HandleTypeDef *htim, uint32_t Channel, float angle)
 	  //PWM限幅
     if(pwm_val > VTM_SERVO_PWM_MAX) pwm_val = VTM_SERVO_PWM_MAX;
     if(pwm_val < VTM_SERVO_PWM_MIN) pwm_val = VTM_SERVO_PWM_MIN;
-	
+
     __HAL_TIM_SetCompare(htim, Channel, (uint32_t)pwm_val);
 }
 
 
-
-
-/**
- * @brief  图传反向增稳控制逻辑
- * @param  gun_pitch_angle: 当前枪管的物理真实仰角 (度)
- * @note   在 Robot_Control_Loop 中以 1kHz 的频率调用
- */
 void VTM_Servo_Control_Loop(float gun_pitch_angle)
 {
 	  float diff = PITCH_HORIZON_DEGREE  - gun_pitch_angle;
-	
+
     //计算补偿后的目标角度
     float target_angle = VTM_SERVO_CENTER + (diff  * VTM_PITCH_RATIO * VTM_DIR_INVERT);
 
@@ -69,11 +56,6 @@ void VTM_Servo_Control_Loop(float gun_pitch_angle)
 }
 
 
-
-/**
- * @brief  倍镜控制逻辑
- * @param  state: MAG_ON (展开) 或 MAG_OFF (收起)
- */
 void Magnifier_Servo_Control(uint8_t state)
 {
     if(state == MAG_ON)

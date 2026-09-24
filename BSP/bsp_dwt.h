@@ -1,3 +1,8 @@
+/**
+ * @file bsp_dwt.h
+ * @brief DWT 微秒级计时接口
+ */
+
 #ifndef BSP_DWT_H
 #define BSP_DWT_H
 

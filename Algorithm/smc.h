@@ -1,9 +1,15 @@
+/**
+ * @file smc.h
+ * @brief 滑模控制器(SMC)与干扰观测器
+ */
+
 #ifndef __SMC_H
 #define __SMC_H
 
 #include <stdint.h>
 #include <math.h>
 
+/** @brief 滑模控制器(SMC)状态 */
 typedef struct {
     // --- 信号输入 ---
     float ref_pos;      // 目标位置
@@ -16,7 +22,7 @@ typedef struct {
     float k_exp;        // 指数趋近率 (负责收敛速度，在大误差时发力)
     float epsilon;      // 等速趋近率 (负责克服静摩擦和快速趋近)
     float beta;         // 干扰观测器增益 (类似 I，消除重力和阻力)
-    
+
     // --- 限制与滤波 ---
     float boundary;     // 饱和函数边界 (防抖动，越小越硬，越大越软)
     float out_max;      // 输出限幅
@@ -30,13 +36,13 @@ typedef struct {
     float dist_est;     // 原始干扰估计
     float dist_est_lp;  // 滤波后的干扰估计
     float output;       // 最终输出
-    
+
 } SMC_Handle_t;
 
-// 初始化函数
+/** @brief 初始化滑模控制器参数(内部清零状态) */
 void SMC_Init(SMC_Handle_t *pSMC, float C, float K, float Epsilon, float Beta, float Boundary, float OutMax, float LpTau, float Ts);
 
-// 计算函数
+/** @brief 执行一次滑模控制计算, 返回控制量 */
 float SMC_Calc(SMC_Handle_t *pSMC);
 
 #endif

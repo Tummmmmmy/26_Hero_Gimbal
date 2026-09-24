@@ -1,3 +1,10 @@
+/**
+ * @file bsp_dwt.c
+ * @brief DWT 微秒级计时
+ *
+ * 基于内核 DWT 计数器, 用于测量任务实际运行周期与代码耗时。
+ */
+
 #include "bsp_dwt.h"
 
 
@@ -13,7 +20,7 @@ void DWT_Init(void)
     DWT->CYCCNT = 0;
 
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    
+
     //获取时钟频率
     CPU_FREQ_Hz_f = (float)HAL_RCC_GetHCLKFreq();
     CPU_FREQ_us_f = CPU_FREQ_Hz_f / 1000000.0f;
@@ -23,13 +30,13 @@ void DWT_Init(void)
 float DWT_Get_Delta_T(uint32_t *last_cnt)
 {
     volatile uint32_t now_cnt = DWT->CYCCNT;
-    
+
     //计算差值
     uint32_t delta_ticks = now_cnt - *last_cnt;
-    
+
     //更新时间戳
     *last_cnt = now_cnt;
-    
+
     //换算成秒
     return (float)delta_ticks / CPU_FREQ_Hz_f;
 }

@@ -1,3 +1,10 @@
+/**
+ * @file shooter_control.h
+ * @brief 发射控制接口：摩擦轮、拨盘、弹速统计与热量管理
+ *
+ * 本模块只产出控制量, CAN 发送由 Robot_Control_Loop 统一调度。
+ */
+
 #ifndef SHOOTER_CONTROL_H
 #define SHOOTER_CONTROL_H
 
@@ -6,14 +13,14 @@
 #include "robot_mode.h"     // Robot_Mode_e / Gimbal_Mode_e
 #include "remote_control.h"  // RC_Data_t / ControlSource_e
 
-// 发射器工作模式
+/** @brief 发射器工作模式(12m/s / 16m/s) */
 typedef enum {
     SHOOTER_MODE_OFF = 0,
     SHOOTER_MODE_LOW_SPEED,   // 12m/s
     SHOOTER_MODE_HIGH_SPEED   // 16m/s
 } Shooter_Mode_e;
 
-// 系统上下文：由 Robot_Control_Loop 每个周期提供的外部系统事实
+/** @brief 发射决策所需的系统事实(上层每周期填入) */
 typedef struct {
     const RC_Data_t* rc;           // 遥控数据
     Robot_Mode_e robot_mode;       // 当前机器人模式
@@ -22,7 +29,7 @@ typedef struct {
     ControlSource_e control_source;// 当前控制源(DR16/VTM)
 } Shooter_Context_t;
 
-// 输出快照：由 Robot_Control_Loop 统一读取后执行 CAN 发送
+/** @brief 发射输出快照(只读) */
 typedef struct {
     float dial_target_speed;
     int16_t friction_current_inner_left;
@@ -38,7 +45,7 @@ typedef struct {
     uint8_t dial_mode_cmd;           // 拨盘使能/失能: 0=无, 0xFC=使能, 0xFD=失能
 } Shooter_Output_t;
 
-// 调试/调参打印快照
+/** @brief 调试/调参打印快照 */
 typedef struct {
     float referee_bullet_speed;
     float bullet_speed_avg;
@@ -62,40 +69,50 @@ typedef struct {
     float predict_heat;          //预测热量
 } Shooter_Debug_Data_t;
 
-// 初始化电机与射击状态
+// ===== 生命周期与主更新 =====
+
+/** @brief 初始化电机与射击状态 */
 void Shooter_Control_Init(void);
 
-// 射击控制更新：传入外部系统上下文，内部完成输入翻译与射击决策，计算输出快照，不直接发 CAN
+/** @brief 射击控制更新：输入系统上下文, 输出控制快照(不直接发 CAN) */
 void Shooter_Control_Update(const Shooter_Context_t *ctx);
 
-// 急停/模式失能
+/** @brief 急停/模式失能 */
 void Shooter_Control_Disable(void);
 
-// 机器人整体启动/关闭时调用
+/** @brief 机器人整体启动时调用 */
 void Shooter_On_Robot_Start(void);
+
+/** @brief 机器人整体关闭(失能)时调用 */
 void Shooter_On_Robot_Off(void);
 
-// 获取输出快照(零拷贝只读)
+// ===== 数据注入与反馈 =====
+
+/** @brief 获取输出快照(零拷贝只读) */
 const Shooter_Output_t* Shooter_Get_Output(void);
 
-// CAN 反馈路由：把拨盘/摩擦轮反馈帧分发到 Shooter 内部
+/** @brief CAN 反馈路由：把拨盘/摩擦轮反馈帧分发到 Shooter 内部 */
 void Shooter_CAN_Feedback(uint32_t can_id, const uint8_t* data);
 
-// 裁判系统数据注入(由底盘双板通信解码后调用)
+/** @brief 注入裁判系统数据 */
 void Shooter_Set_Referee_Data(uint16_t heat, uint16_t limit, uint16_t cooling, float speed);
 
-// 重置弹速统计与自适应补偿状态
+/** @brief 重置弹速统计与自适应补偿状态 */
 void Shooter_Reset_Stats(void);
 
 
-// 电机在线检测，供 Monitor_Task 使用
+/** @brief 检查发射机构电机在线状态 */
 void Shooter_Check_Motors_Online(uint32_t current_tick);
 
-// 调试打印周期处理
+// ===== 调试与调参 =====
+
+/** @brief 调试打印周期处理 */
 const Shooter_Debug_Data_t* Shooter_Get_Debug_Data(void);
 
-// 摩擦轮目标转速微调
+/** @brief 高速档摩擦轮目标转速微调 */
 void Shooter_Tune_High_Speed(int32_t delta);
+
+/** @brief 低速档摩擦轮目标转速微调 */
 void Shooter_Tune_Low_Speed(int32_t delta);
 
 #endif

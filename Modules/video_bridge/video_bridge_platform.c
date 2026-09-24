@@ -1,3 +1,10 @@
+/**
+ * @file video_bridge_platform.c
+ * @brief 图传桥接的平台相关实现
+ *
+ * UART7 DMA 收数与写入位置查询、毫秒时基、0x0310 自定义帧发送。
+ */
+
 #include "video_bridge_platform.h"
 #include "usart.h"
 #include "cmsis_os2.h"
@@ -6,11 +13,9 @@
 #include <string.h>
 
 
-
 //视觉小电脑 UART7
 #define VISION_UART_HANDLE   huart7
 extern UART_HandleTypeDef    huart7;
-
 
 
 // 大疆 VTM 图传连接的串口
@@ -19,7 +24,6 @@ extern UART_HandleTypeDef    huart1;
 
 //全全局桥接上下文
 extern bridge_context_t g_bridge;
-
 
 
 static const uint8_t CRC8_INIT = 0xff;
@@ -96,26 +100,19 @@ static void Local_Append_CRC16(uint8_t *pchMessage, uint32_t dwLength)
     uint8_t chData;
     uint32_t len = dwLength - 2;
     const uint8_t *ptr = pchMessage;
-    
+
     if ((pchMessage == NULL) || (dwLength <= 2)) return;
-    
+
     while (len--) {
         chData = *ptr++;
         wCRC = (wCRC >> 8) ^ wCRC_Table[(wCRC ^ chData) & 0x00ff];
     }
-    
+
     pchMessage[dwLength - 2] = (uint8_t)(wCRC & 0x00ff);
     pchMessage[dwLength - 1] = (uint8_t)((wCRC >> 8) & 0x00ff);
 }
 
 
-
-
-
-
-/**
- * @brief 启动视觉串口 DMA 接收
- */
 void bridge_platform_uart_start_rx_dma(uint8_t* buffer, size_t size) 
 {
     // 1. 强行终止之前可能因为乱码卡死的任何接收状态
@@ -130,30 +127,21 @@ void bridge_platform_uart_start_rx_dma(uint8_t* buffer, size_t size)
 }
 
 
-
-
-/**
- * @brief 获取 DMA 当前写入位置 (H7 最容易翻车的地方)
- */
 size_t bridge_platform_uart_rx_write_index(void) 
 {
     // 刷新 L1 Cache，强制 CPU 从物理 RAM 读取最新数据
     // 否则 CPU 会读到全 0 的假数据，导致解析失败！
     SCB_InvalidateDCache_by_Addr((uint32_t *)g_bridge.rx_dma_buffer, sizeof(g_bridge.rx_dma_buffer));
-    
+
     // DMA 计数器是递减的，当前位置 = 总大小 - 剩余未传数量
     return sizeof(g_bridge.rx_dma_buffer) - __HAL_DMA_GET_COUNTER(VISION_UART_HANDLE.hdmarx);
-	
+
 }
 
-/**
- * @brief 获取系统毫秒级时间
- */
 uint32_t bridge_platform_tick_ms(void) 
 {
     return osKernelGetTickCount();
 }
-
 
 
 // 分配对齐的发送缓存
@@ -165,7 +153,7 @@ bool bridge_platform_send_custom_0310(const uint8_t* data, uint16_t size)
     // 如果视觉给的包超过 300，超出物理极限，直接扔掉
     if(size > 300) return false;
 
-	
+
     // 静态包序号，每次发送自增（破解大疆图传的反重放拦截机制）
     static uint8_t seq_num = 0;
 
@@ -202,10 +190,9 @@ bool bridge_platform_send_custom_0310(const uint8_t* data, uint16_t size)
         return true; 
     }
 
-    
+
     return false; // 串口堵塞或发送失败
 }
-
 
 
 void Video_Bridge_Reset(void)
@@ -214,10 +201,6 @@ void Video_Bridge_Reset(void)
 }
 
 
-
-/**
- * @brief 调试打印
- */
 void bridge_platform_debug_log(const char* message) 
 {
     // printf("[Video_Bridge] %s\r\n", message);

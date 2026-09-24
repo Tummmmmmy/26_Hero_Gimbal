@@ -1,7 +1,13 @@
+/**
+ * @file Vision_can.h
+ * @brief [废弃] 早期 CAN 视觉通信协议定义
+ *
+ * 已被 vision_link(USB CDC) 取代, 未加入 Keil 工程编译, 仅保留备查。
+ */
+
 #ifndef VISION_CAN_H
 #define VISION_CAN_H
 
-// [废弃] 历史 CAN 视觉实现: 已确认不再使用, 不纳入主架构, 不参与编译, 保留仅供参考
 
 #include "main.h"
 
@@ -11,7 +17,7 @@
 #define VISION_TX_S_CAN_ID 0x110//0x110
 
 
-//视觉发来的数据
+/** @brief 视觉接收数据(旧CAN协议) */
 typedef struct
 {
     uint8_t is_controlling; //是否控制
@@ -19,13 +25,12 @@ typedef struct
     float yaw_angle;        //目标Yaw(弧度)
     float pitch_angle;      //目标Pitch(弧度)
     float distance;         //距离(米)
-    
+
     uint32_t update_time;   //上次更新时间
 } Vision_Rec_Data_t;
 
 
 extern Vision_Rec_Data_t vision_recv_data;
-
 
 
 void Vision_CAN_Decode(uint32_t std_id, uint8_t *rx_data);

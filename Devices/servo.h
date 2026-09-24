@@ -1,3 +1,8 @@
+/**
+ * @file servo.h
+ * @brief 舵机 PWM 驱动接口与物理参数
+ */
+
 #ifndef SERVO_CONTROL_H
 #define SERVO_CONTROL_H
 
@@ -20,14 +25,11 @@
 #define VTM_SERVO_PWM_MAX  1800
 
 
-
 //传动比例
 #define VTM_PITCH_RATIO 1.58f //1.58
 
 //方向反转
 #define VTM_DIR_INVERT 1        
-
-
 
 
 //lens
@@ -41,14 +43,16 @@
 #define MAG_ON  1  //开倍镜
 
 
-
-
+/** @brief 初始化舵机 PWM 并回到初始角度 */
 void Bsp_Servo_Init(void);
 
+/** @brief 设置舵机角度(0 ~ 180 度, 内部限幅) */
 void Servo_Set_Angle(TIM_HandleTypeDef *htim, uint32_t Channel, float angle);
 
+/** @brief 图传反向增稳控制(在控制循环中以 1kHz 调用) */
 void VTM_Servo_Control_Loop(float gun_pitch_angle);
 
+/** @brief 倍镜舵机控制(MAG_ON 展开 / MAG_OFF 收起) */
 void Magnifier_Servo_Control(uint8_t state);
 
 #endif

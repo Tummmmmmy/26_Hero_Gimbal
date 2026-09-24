@@ -2,8 +2,7 @@
  * @file can_receive.c
  * @brief CAN 接收路由模块
  *
- * 只做分拣: 按总线/ID 把收到的 CAN 帧分发到对应模块的解码接口,
- * 字节解析由各模块(Shooter/Gimbal/Chassis)内部完成。
+ * 按总线/ID 把收到的 CAN 帧分发到对应模块的解码接口
  */
 
 #include "can_receive.h"
@@ -16,10 +15,6 @@
 // 拨盘电机反馈帧 ID(DM 电机)
 #define RX_DIAL_FDB_ID 0x302
 
-/**
- * @brief 按总线与ID分发CAN接收帧
- * @param msg 收到的CAN帧(FDCAN中断已入队)
- */
 void CAN_Rx_Route(const CAN_Rx_Message_t* msg)
 {
     if(msg->hfdcan->Instance == FDCAN1)

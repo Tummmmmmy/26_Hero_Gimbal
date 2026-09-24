@@ -2,8 +2,9 @@
  * @file bsp_can.h
  * @brief FDCAN 硬件抽象层接口
  *
- * 只负责 FDCAN 外设配置与底层收帧，不解析具体协议。
+ * 负责 FDCAN 外设配置与底层收帧
  */
+
 #ifndef BSP_CAN_H
 #define BSP_CAN_H
 

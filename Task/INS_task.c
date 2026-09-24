@@ -1,3 +1,11 @@
+/**
+ * @file INS_task.c
+ * @brief IMU 姿态解算任务
+ *
+ * 读取 BMI088 原始数据, 完成零偏校准、EKF/Mahony 姿态解算与加热温控,
+ * 输出 IMU_Data_t 供控制循环使用。
+ */
+
 #include "main.h"
 #include "cmsis_os.h"
 #include "BMI088driver.h"
@@ -19,8 +27,6 @@
 float RefTemp = 45.0f;               //目标温度
 
 
-
-
 #if (USE_HARDCODED_BIAS == 1)
     //硬编码零偏
     volatile uint8_t imu_ready_flag = 1; 
@@ -35,8 +41,6 @@ float RefTemp = 45.0f;               //目标温度
 #endif
 
 
-
-
 PID_Controller Temperature_PID={0};
 float gyro[3], accel[3], temp;
 float roll,pitch,yaw=0;
@@ -48,10 +52,10 @@ uint8_t IMU_level = 0;
 
 static void INS_Init(void)
 {
-	
+
     IMU_QuaternionEKF_Init(10, 0.001, 10000000, 1, 0.001f,0); //ekf初始化
 		PID_Init(&Temperature_PID,1600,50,40,200,2000); //加热pidlimit
-	
+
 		Mahony_Init(1000);  //mahony姿态解算初始化
     // imu heat init
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
@@ -75,7 +79,7 @@ static void IMU_Temperature_Ctrl()
  * @param: argument - 任务参数
  * @retval: void
  * @details: IMU姿态控制任务函数
- 
+
 */
 static uint8_t first_mahony=0; 
 static void INS_Task(void)
@@ -84,7 +88,7 @@ static void INS_Task(void)
 
     //1. 读取原始数据
 		BMI088_read(gyro, accel, &temp);
-	
+
 	  // 2.首次运行初始化四元数 (防止一开始数据没准备好)
 		if(first_mahony==0)
 		{
@@ -97,34 +101,30 @@ static void INS_Task(void)
 			gyro[0]-=gyro_correct[0];   //减去陀螺仪0飘
 			gyro[1]-=gyro_correct[1];
 			gyro[2]-=gyro_correct[2];
-			
-			
+
+
 			#if cheat              //作弊 可以让yaw很稳定 去掉比较小的值
 				if(fabsf(gyro[2])<0.003f)
 					gyro[2]=0;
 			#endif
-			//===========================================================================
-				//ekf姿态解算部分
+			// ===== EKF 姿态解算 =====
 			//HAL_GPIO_WritePin(GPIOE,GPIO_PIN_13,GPIO_PIN_SET);
 			IMU_QuaternionEKF_Update(gyro[0],gyro[1],gyro[2],accel[0],accel[1],accel[2]);
 			//HAL_GPIO_WritePin(GPIOE,GPIO_PIN_13,GPIO_PIN_RESET);
-			//===============================================================================	
-						
-			//=================================================================================
-			//mahony姿态解算部分
+
+			// ===== Mahony 姿态解算 =====
 			//HAL_GPIO_WritePin(GPIOE,GPIO_PIN_13,GPIO_PIN_SET);
 			Mahony_update(gyro[0],gyro[1],gyro[2],accel[0],accel[1],accel[2],0,0,0);
 			Mahony_computeAngles(); //角度计算   移植到别的平台需要替换掉对应的arm_atan2_f32 和 arm_asin
 			//HAL_GPIO_WritePin(GPIOE,GPIO_PIN_13,GPIO_PIN_RESET);
-			//=============================================================================
 			//ekf获取姿态角度函数
 			pitch=-Get_Roll() + 180.0f; //获得pitch
 			roll=Get_Pitch() + 180.0f;//获得roll
 			yaw=Get_Yaw() + 180.0f;//获得yaw
-				
+
 			total_yaw = Get_Total_Yaw() + 180.0f;
-			
-			
+
+
 			imu_ready_flag = 1;//数据准备就绪
 		}
 		else if(attitude_flag==2)   //状态1 开始1000次的陀螺仪0飘初始化
@@ -140,7 +140,7 @@ static void INS_Task(void)
 					gyro_correct[1]/=correct_Time_define;
 					gyro_correct[2]/=correct_Time_define;
 					attitude_flag=3; //go to 2 state
-					
+
 //					Set_BuzzerMode(ZERO_TIME);//陀螺仪校准结束，蜂鸣器不叫
 					imu_ready_flag = 0;
 				}
@@ -151,23 +151,22 @@ static void INS_Task(void)
     if(count >= 10)
     {
    			count = 0;
-			
+
 				if(attitude_flag < 2)
 				{
 					attitude_flag = 1;
-					
+
 //					Set_BuzzerMode(ONE_TIME);//陀螺仪校准中，蜂鸣器持续叫
 				}
         // 100hz 的温度控制pid
         IMU_Temperature_Ctrl();
-				
-				
-				
+
+
 				static uint32_t total_wait_time = 0;
 				total_wait_time++; 
         //注意：这里进一次是 10ms
         //1000次 = 10秒, 2000次 = 20秒
-				
+
             float current_tolerance = 0.5f;
 
             if(total_wait_time < 3000) 
@@ -187,11 +186,11 @@ static void INS_Task(void)
             }
 
             static uint32_t temp_Ticks = 0;
-            
+
 						if((fabsf(temp-RefTemp)<current_tolerance) && attitude_flag==1)//接近目标温度 开始计数
 						{
 							temp_Ticks++;
-			
+
 							if(temp_Ticks > temp_times)
 							{
 								attitude_flag= 2;//go to correct state
@@ -205,23 +204,22 @@ static void INS_Task(void)
 }
 
 
-
 void IMU_task(void const * argument)
 {
 	  osDelay (500);
-	
+
     INS_Init();
-	
+
 	  TickType_t xLastWakeTime;
-	
+
 	  const TickType_t xFrequency = pdMS_TO_TICKS(1); 
-	
+
 	  xLastWakeTime = xTaskGetTickCount();
     /* Infinite loop */
     for (;;)
     {
         INS_Task();
-			
+
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
@@ -246,8 +244,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 
 }
-
-
 
 
 extern float q0, q1, q2, q3; 
@@ -279,7 +275,7 @@ void Reset_All_IMU_Yaw_Only(void)
     float new_qy = sy * cp * sr + cy * sp * cr;
     float new_qz = sy * cp * cr - cy * sp * sr;
 
-    
+
     //改EKF
     IMU_QuaternionEKF_Reset(); 
     QEKF_INS.IMU_QuaternionEKF.xhat_data[0] = new_qw;

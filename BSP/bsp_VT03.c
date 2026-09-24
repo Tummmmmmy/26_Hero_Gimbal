@@ -1,3 +1,10 @@
+/**
+ * @file bsp_VT03.c
+ * @brief VT03 图传遥控驱动
+ *
+ * UART1 接收 VT03 遥控帧, 校验帧头与 CRC16 后解析键鼠/拨杆数据。
+ */
+
 #include "bsp_VT03.h"
 #include "string.h"
 
@@ -7,7 +14,6 @@ static uint32_t vt03_last_update_tick = 0;   //上一次接收时间
 
 
 __attribute__((aligned(32))) static uint8_t vtm_rx_buffer[VT03_RX_BUFFER_SIZE]; //DMA接收缓冲区
-
 
 
 /****************************************CRC校验****************************************/
@@ -46,7 +52,6 @@ static uint16_t get_crc16_check_sum(uint8_t *p_msg, uint16_t len, uint16_t crc16
 }
 
 
-
 bool verify_crc16_check_sum(uint8_t *p_msg, uint16_t len)
 {
     uint16_t w_expected = 0;
@@ -54,7 +59,6 @@ bool verify_crc16_check_sum(uint8_t *p_msg, uint16_t len)
     w_expected = get_crc16_check_sum(p_msg, len - 2, 0xFFFF);
     return ((w_expected & 0xff) == p_msg[len - 2] && ((w_expected >> 8) & 0xff) == p_msg[len - 1]);
 }
-
 
 
 /****************************************DMA-串口接收****************************************/
@@ -65,10 +69,10 @@ void VT03_Init(void)
 {
     //强制终止可能因为上电电平抖动而误触发的硬件状态
     HAL_UART_AbortReceive(&VT03_UART_HANDLE);
-    
+
     //清除所有错误标志位
     __HAL_UART_CLEAR_FLAG(&VT03_UART_HANDLE, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_PEF | UART_CLEAR_FEF);
-    
+
     //清除空闲标志位
     __HAL_UART_CLEAR_IDLEFLAG(&VT03_UART_HANDLE);
 
@@ -80,7 +84,6 @@ void VT03_Init(void)
 }
 
 
-
 /**
   * @brief  判断VT03是否在线
   */
@@ -89,8 +92,6 @@ bool VT03_IsOnline(void)
     if(vt03_last_update_tick == 0) return false;
     return ((osKernelGetTickCount() - vt03_last_update_tick) <= VT03_TIMEOUT_MS);
 }
-
-
 
 
 /**
@@ -106,7 +107,6 @@ const VT03_Receive_t* VT03_GetData(void)
 }
 
 
-
 static void VT03_Decode(const uint8_t* rx_buf, uint16_t len)
 {
     //在缓冲区中寻找帧头
@@ -118,12 +118,12 @@ static void VT03_Decode(const uint8_t* rx_buf, uint16_t len)
             if(verify_crc16_check_sum((uint8_t*)(rx_buf + i), VT03_PACK_SIZE))
             {
                 memcpy(VT03_ReceiveData.data.dataBuff, &rx_buf[i + 2], VT03_DATA_LEN);
-                
+
                 VT03_ReceiveData.data.keyBoard.key_code = 
                     (uint16_t)(VT03_ReceiveData.data.dataBuff[16] << 8) | VT03_ReceiveData.data.dataBuff[15];
-                
+
                 vt03_last_update_tick = osKernelGetTickCount();//更新时间戳
-                
+
                 return;
             }
         }
@@ -131,17 +131,14 @@ static void VT03_Decode(const uint8_t* rx_buf, uint16_t len)
 }
 
 
-
-
 //接收回调
 void VT03_RX_Callback_Handler(uint16_t Size)
 {
 	  //H7 Cache刷新
     SCB_InvalidateDCache_by_Addr((uint32_t *)vtm_rx_buffer, VT03_RX_BUFFER_SIZE);
-	
+
     VT03_Decode(vtm_rx_buffer, Size);
 }
-
 
 
 //串口错误复位与重启函数
@@ -157,4 +154,3 @@ void VT03_Reset(void)
     //重新开启DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(&VT03_UART_HANDLE, vtm_rx_buffer, VT03_RX_BUFFER_SIZE);
 }
-

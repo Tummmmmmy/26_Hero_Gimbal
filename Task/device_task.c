@@ -1,3 +1,10 @@
+/**
+ * @file device_task.c
+ * @brief 设备指示任务
+ *
+ * 按系统 LED 状态驱动 WS2812 灯带, 指示当前机器人模式/复位/基地锁定等状态。
+ */
+
 #include "device_task.h"
 #include "robot_control.h"
 #include "ws2812.h"
@@ -6,15 +13,14 @@
 
 void Device_task(void)
 {
-	
+
 	osDelay(500);
-	
+
 	while(1)
 	{	
 			switch(Robot_Get_Led_State())
 			{
 					case LED_STATE_BOOTING:
-//						WS2812_Set_Colour(255, 255, 0); //黄色
 					    WS2812_Set_Colour(50, 50, 0); //黄色
 							break;
 
@@ -24,19 +30,17 @@ void Device_task(void)
 
 					case LED_STATE_ENABLED:
 						  WS2812_Set_Colour(50, 50, 0); //黄色
-//							WS2812_Set_Colour(0, 0, 255);   //蓝色
-//					      WS2812_Set_Colour(255, 255, 0); //黄色
 							break;
-					
+
 					case LED_STATE_CLIMB_FRONT:
 //              WS2812_Set_Colour(0, 255, 255); //青色
 							break;
-							
+
 					case LED_STATE_CLIMB_BACK:
 //							WS2812_Set_Colour(0, 255, 255); //青色
 							break;
-					
-					
+
+
 					case LED_STATE_BASE_HIT_READY:
 					{
 							for(int i = 0; i <= 100; i+=10) 
@@ -46,7 +50,7 @@ void Device_task(void)
 							}
 							break;
 					}
-					
+
 					case LED_STATE_RESET:
 					{
                 for(int i = 0; i < 3; i++)
@@ -58,8 +62,8 @@ void Device_task(void)
                 }
 							break;
 					}
-							
-					
+
+
 					//WS2812_Set_Colour(0, 255, 0);纯绿色
 					//WS2812_Set_Colour(0, 150, 0);暗绿色
 					//WS2812_Set_Colour(10, 80, 0); 冰蓝色
@@ -67,14 +71,13 @@ void Device_task(void)
 					//WS2812_Set_Colour(255, 100, 0);橙色
 					//WS2812_Set_Colour(200, 20, 0); 粉色
 					//WS2812_Set_Colour(255, 20, 0);粉色
-					
-					
-					
+
+
 					//WS2812_Do_Breathe(200, 200, 0, 4);白色呼吸灯//超电?
 					//WS2812_Do_Breathe(255, 255, 0, 5);黄色呼吸灯
 					//WS2812_Do_Breathe(0, 255, 0, 5);绿色呼吸灯
 					//WS2812_Do_Breathe(255, 0, 0, 3);红色呼吸灯
-					
+
 					default:
 							WS2812_Set_Colour(255, 0, 0);
 							osDelay(50);
@@ -84,9 +87,6 @@ void Device_task(void)
 			osDelay(100);
 	}
 }
-
-
-
 
 
 /**
@@ -117,4 +117,3 @@ void WS2812_Do_Breathe(uint8_t r, uint8_t g, uint8_t b, uint8_t delay_ms)
         osDelay(delay_ms);
     }
 }
-

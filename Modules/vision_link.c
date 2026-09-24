@@ -1,3 +1,10 @@
+/**
+ * @file vision_link.c
+ * @brief 视觉通信模块(USB CDC 虚拟串口)
+ *
+ * 校验并解析视觉报文, 维护视觉目标数据与在线状态;
+ */
+
 #include "vision_link.h"
 #include "chassis_control.h"
 #include "usbd_cdc_if.h"
@@ -22,7 +29,6 @@ static uint8_t usb_reconnect_state = 0;
 static uint32_t usb_reconnect_timer = 0; 
 
 
-
 //外部IMU全局变量
 extern float pitch, yaw, total_yaw;
 extern float gyro[3]; // gyro[0]=pitch_rate, gyro[2]=yaw_rate (rad/s)
@@ -30,31 +36,21 @@ extern float gyro[3]; // gyro[0]=pitch_rate, gyro[2]=yaw_rate (rad/s)
 extern float q0, q1, q2, q3;// 四元数 [w,x,y,z]
 
 
-
-/**
- * @brief  视觉通信初始化
- */
 void Vision_Init(void)
 {
     memset(&VisionData, 0, sizeof(VisionData));
-    
+
     // 初始化发送帧头
     VisionTxData.head[0] = 'S'; // 0x53
     VisionTxData.head[1] = 'P'; // 0x50
 }
 
 
-
-/**
-  * @brief  判断视觉是否在线
-  */
 bool Vision_IsOnline(void)
 {
     if(VisionData.last_update_time == 0) return false;
     return ((osKernelGetTickCount() - VisionData.last_update_time) < VISION_TIMEOUT_MS);
 }
-
-
 
 
 //清除目标数据
@@ -69,15 +65,9 @@ void Clear_Vision_Target(void)
 }
 
 
-
 volatile uint32_t vision_count = 0;
 
-/**
- * @brief  解析USB接收到的视觉数据
- * @note   这个函数将在 usbd_cdc_if.c 的接收回调中被调用
- * @param  buf: 数据指针
- * @param  len: 数据长度
- */
+// 由 usbd_cdc_if.c 的 USB CDC 接收回调在收满一包后调用
 void Vision_Process_Data(uint8_t *buf, uint32_t len)
 {
     //长度校验 
@@ -85,7 +75,7 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
 		{
         return;
     }
-    
+
     //强制转换
     Vision_Recv_t* pRecv = (Vision_Recv_t*)buf;
 
@@ -100,22 +90,22 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
     if(cal_crc == pRecv->crc16)
     {
 		  	vision_count++;
-			
+
 			  if(isnan(pRecv->yaw) || isinf(pRecv->yaw) || isnan(pRecv->pitch) || isinf(pRecv->pitch))
 				{
             return; 
         }
-        
+
         //检查数值是否在合理范围内 (比如 +/- 180度)
         // 视觉给的是 rad，所以范围是 +/- PI
         if(fabs(pRecv->yaw) > 3.15f || fabs(pRecv->pitch) > 1.57f)
 				{
             return;
         }
-			
+
         //校验通过，更新数据
         VisionData.cmd_mode = pRecv->mode;
-        
+
         if(pRecv->mode != 0)
         {
             VisionData.is_tracking = 1;
@@ -123,13 +113,13 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
             VisionData.target_pitch_rad = pRecv->pitch;
             VisionData.target_yaw_acc = pRecv->yaw_acc;
             VisionData.target_pitch_acc = pRecv->pitch_acc;
-					
+
             VisionData.last_update_time = osKernelGetTickCount();
         }
         else
         {
 					    Clear_Vision_Target();
-					
+
         }
 			  VisionData.target_yaw_base_hit = pRecv->yaw_base_hit;
         VisionData.target_pitch_base_hit = pRecv->pitch_base_hit;
@@ -137,15 +127,11 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
 }
 
 
-
-/**
- * @brief  打包并发送数据给视觉 
- */
 void Vision_Send_Data(void)
 {
     //填充IMU数据
     VisionTxData.mode = 1; //回传一个模式，可以自定义
-    
+
     // 四元数
     VisionTxData.q[0] = q0; // w
     VisionTxData.q[1] = q1; // x
@@ -155,7 +141,7 @@ void Vision_Send_Data(void)
     // 欧拉角 (rad)
     VisionTxData.yaw = (total_yaw - 180.0f) * (PI / 180.0f);
     VisionTxData.pitch = (pitch - 180.0f) * (PI / 180.0f);
-    
+
     // 角速度 (rad/s)
     VisionTxData.yaw_vel = gyro[2];
     VisionTxData.pitch_vel = gyro[0];
@@ -177,7 +163,7 @@ void Vision_Send_Data(void)
 		extern USBD_HandleTypeDef hUsbDeviceHS;
 		USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceHS.pClassData;
 
-		
+
     //检查发送器是否空闲
     if(hcdc != NULL && hcdc->TxState == 0) 
     {
@@ -185,8 +171,6 @@ void Vision_Send_Data(void)
         CDC_Transmit_HS((uint8_t*)&VisionTxData, sizeof(Vision_Send_t));
     }
 }
-
-
 
 
 //异步非阻塞 USB 重启状态机
@@ -199,7 +183,6 @@ void Vision_Force_Reconnect_Start(void)
 }
 
 
-
 void Vision_Reconnect_Task_Async(void)
 {
     if(usb_reconnect_state == 1)
@@ -208,7 +191,7 @@ void Vision_Reconnect_Task_Async(void)
         USBD_Stop(&hUsbDeviceHS);
         USBD_DeInit(&hUsbDeviceHS);
         HAL_PCD_DevDisconnect(&hpcd_USB_OTG_HS);
-        
+
         usb_reconnect_timer = osKernelGetTickCount();
         usb_reconnect_state = 2; // 进入等待状态
     }
@@ -224,6 +207,3 @@ void Vision_Reconnect_Task_Async(void)
         }
     }
 }
-
-
-

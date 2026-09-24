@@ -8,5 +8,3 @@ void float_Batwolf(float *input,float *output,float* y);
 void ClearFilter(float filter[],int size);
 
 #endif
-
-

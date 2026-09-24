@@ -3,8 +3,8 @@
  * @brief CAN 发送协议层
  *
  * 负责把控制量打包成具体电机/设备协议并发送。
- * 底层 FDCAN 硬件收发由 BSP/bsp_can 提供。
  */
+
 #include "can_transmit.h"
 #include "bsp_can.h"
 #include "motor.h"
@@ -31,13 +31,7 @@
 //仅本文件使用: 把 x 限制在 [min,max] 区间内(原定义在 main.h)
 #define LIMIT_MIN_MAX(x,min,max) (x) = (((x)<=(min))?(min):(((x)>=(max))?(max):(x)))
 
-/**
- * @brief  将浮点数转换为无符号整数
- * @param  x     			要转换的浮点数
- * @param  x_min      浮点数的最小值
- * @param  x_max    	浮点数的最大值
- * @param  bits      	无符号整数的位数
- */
+// 浮点量线性映射为 bits 位无符号整数(越界按端点钳位)
 
 int float_to_uint(float x, float x_min, float x_max, int bits) {
     float span = x_max - x_min;
@@ -47,14 +41,6 @@ int float_to_uint(float x, float x_min, float x_max, int bits) {
 }
 
 
-
-/**
-  * @brief  大疆电机控制指令发送
-  * @param  hfdcan: FDCAN句柄指针
-  * @param  std_id: 目标控制CAN ID
-  * @param  current: 对应4个电机的目标电流
-  */
-//大疆电机控制指令
 void DJI_Motor_Send_Command(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, int16_t current1, int16_t current2, int16_t current3, int16_t current4)
 {
     uint8_t tx_data[8];
@@ -89,17 +75,10 @@ void LK_Motor_Enable(FDCAN_HandleTypeDef* hfdcan)
 }
 
 
-
-/**
-  * @brief  瓴控电机转矩控制发送
-  * @param  hfdcan: FDCAN句柄指针
-  * @param  id: 电机实际ID (1, 2)
-  * @param  current_amps: 目标电流值 (安培)
-  */
 void LK_Send_Torque(FDCAN_HandleTypeDef* hfdcan, float current_amps)
 {
     uint8_t tx_data[8];
-    
+
     //限制电流幅度
     if(current_amps > 16.5f) current_amps = 16.5f;
     if(current_amps < -16.5f) current_amps = -16.5f;
@@ -126,7 +105,7 @@ void LK_Send_Torque(FDCAN_HandleTypeDef* hfdcan, float current_amps)
 void LK_Send_Query(FDCAN_HandleTypeDef* hfdcan)
 {
     uint8_t tx_data[8];
-    
+
 
     tx_data[0] = 0x9C;
     tx_data[1] = 0x00;
@@ -168,7 +147,6 @@ void DM_Motor_Send_MIT_Command(FDCAN_HandleTypeDef *hfdcan, uint16_t motor_id, f
 }
 
 
-
 //将达妙速度控制指令发送给底盘
 void Dial_Send_Speed(FDCAN_HandleTypeDef *hfdcan, float target_vel)
 {
@@ -185,7 +163,6 @@ void Dial_Send_Speed(FDCAN_HandleTypeDef *hfdcan, float target_vel)
 }
 
 
-
 void Dial_Send_Mode_Command(FDCAN_HandleTypeDef *hfdcan, uint8_t command)
 {
     uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, command};
@@ -195,18 +172,17 @@ void Dial_Send_Mode_Command(FDCAN_HandleTypeDef *hfdcan, uint8_t command)
 }
 
 
-
 //云台发底盘数据包
 typedef union
 {
     uint8_t data[8];
-    
+
     __packed struct
     {
         int64_t  vx : 16;             //(-16384 ~ 16383)
         int64_t  vy : 16; 
         int64_t  wz : 16; 
-        
+
         uint64_t mode           : 1;  //底盘状态(0=失能, 1=使能)
         uint64_t supercap_req   : 1;  //超电(0=关, 1=开)
         uint64_t climb_cmd      : 2;  //上坎指令(0~3)(0=全收, 1=前伸, 2=后伸)
@@ -214,9 +190,9 @@ typedef union
         uint64_t key_shift      : 1;  //Shift键状态(0=松开, 1=按下)
         uint64_t friction_state : 2;  // 0: 关, 1: 低速 (12m/s), 2: 高速 (16m/s)
 			  uint64_t is_base_locked : 1;  //基地已锁定
-			
+
 			  uint64_t battle_mode    : 2;  //键鼠模式(0: 失能, 1:跟随, 2: 底盘锁 3: 吊射)
-        
+
         uint64_t reserved       : 5; //剩5位
     } pack;
 } Gimbal_To_Chassis_Msg_t;
@@ -227,11 +203,10 @@ void Send_Chassis_Command(FDCAN_HandleTypeDef* hfdcan, int16_t vx, int16_t vy, i
     Gimbal_To_Chassis_Msg_t tx_msg = {0};
 
 
-		
     tx_msg.pack.vx = LIMIT_16BIT(vx);
     tx_msg.pack.vy = LIMIT_16BIT(vy);
     tx_msg.pack.wz = LIMIT_16BIT(wz);
-    
+
     tx_msg.pack.mode           = mode & 0x01;
     tx_msg.pack.supercap_req   = supercap_req & 0x01;
     tx_msg.pack.climb_cmd      = climb_cmd & 0x03;
@@ -246,18 +221,17 @@ void Send_Chassis_Command(FDCAN_HandleTypeDef* hfdcan, int16_t vx, int16_t vy, i
 }
 
 
-
 typedef union
 {
     uint8_t data[8]; 
-    
+
     __packed struct
     {
         uint64_t yaw_angle_x100   : 16; //Yawn轴机械角度
         int64_t  pitch_angle_x100 : 16; //Pitch俯仰机械角度
-			
+
 			  uint64_t friction_speed   : 13; //摩擦轮目标转速
-			
+
         uint64_t reserved        : 19; //剩19位
     } pack;
 } Gimbal_UI_Msg_t;
@@ -275,8 +249,8 @@ void Send_Chassis_UI_Data(FDCAN_HandleTypeDef* hfdcan, float yaw_deg, float pitc
 		LIMIT_MIN_MAX(pit_deg_x100, -18000, 18000);
     ui_msg.pack.yaw_angle_x100   = (uint16_t)yaw_deg_x100;
     ui_msg.pack.pitch_angle_x100 = pit_deg_x100;
-		
-		
+
+
 		ui_msg.pack.friction_speed = (friction_speed > 8191) ? 8191 : friction_speed;
 
     //直接写入硬件发送 FIFO(检查是否有空位)
