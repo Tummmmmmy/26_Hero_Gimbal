@@ -2,7 +2,6 @@
  * @file monitor_task.c
  * @brief 电机在线检测任务
  *
- * 周期性检查云台与拨盘电机的反馈更新时间并维护在线标志。
  */
 
 #include "monitor_task.h"
@@ -13,7 +12,6 @@
 #include "gimbal_control.h"
 
 
-//离线检测任务
 void Monitor_Task(void const * argument)
 {
     osDelay(1000); 
@@ -29,7 +27,7 @@ void Monitor_Task(void const * argument)
         //云台
         Gimbal_Check_Motors_Online(now);
 
-        //拨盘
+        //发射
         Shooter_Check_Motors_Online(now);
 
         vTaskDelayUntil(&xLastWakeTime, TimeIncrement);

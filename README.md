@@ -32,6 +32,7 @@
 
 ## 编码约定
 - 现有 `.c/.h` 源文件为 **GBK** 编码，请勿用会批量转换编码的工具处理
+- 例外：`Algorithm/` 下移植的算法文件（`LADRC.c`、`QuaternionEKF.c/.h`、`kalman_filter.c/.h`）与 `smc.c/.h`、`BSP/bsp_buzzer.c` 为 UTF-8，保持移植原样
 - `README.md` 与 `docs/` 下的文档为 UTF-8
 
 ## 控制模式（Robot_Mode_e）
@@ -47,12 +48,20 @@
 | BATTLE | 综合战斗（键鼠操作） |
 
 ## CAN 分配（关键）
-| 总线 | 设备 / 方向 |
-|---|---|
-| FDCAN1 | LK Yaw(0x141)、DM 拨盘(0x07)、底盘指令 TX(0x300)、UI TX(0x308) |
-| FDCAN2 | 摩擦轮外圈(0x200)、摩擦轮内圈(0x1FF) |
-| FDCAN3 | Pitch(0x1FF) |
-| 接收 | 底盘数据 0x304、裁判系统、电机反馈 |
+| 总线 | 帧 ID | 方向 / 含义 |
+|---|---|---|
+| FDCAN1 | 0x141 | LK Yaw：TX 力矩指令 / RX 电机反馈 |
+| FDCAN1 | 0x300 | TX 云台 → 底盘控制指令（速度/模式/超电/上坎/LED/摩擦轮状态/基地锁定） |
+| FDCAN1 | 0x308 | TX 云台 → 底盘 UI 数据（50ms 周期：云台角度 + 摩擦轮转速） |
+| FDCAN1 | 0x301 | TX 拨盘模式指令（0xFC 使能 / 0xFD 失能） |
+| FDCAN1 | 0x303 | TX 拨盘速度指令（float，4 字节） |
+| FDCAN1 | 0x302 | RX 拨盘反馈（达妙电机） |
+| FDCAN1 | 0x304 | RX 底盘双板反馈（颜色 / 裁判系统数据转发） |
+| FDCAN2 | 0x200 | TX 摩擦轮外圈电流（电机 ID 1/2/3） |
+| FDCAN2 | 0x1FF | TX 摩擦轮内圈电流（电机 ID 5/6/7） |
+| FDCAN2 | 0x201 ~ 0x207 | RX 摩擦轮反馈（电机 ID 4 未使用） |
+| FDCAN3 | 0x1FF | TX Pitch 电流 |
+| FDCAN3 | 0x205 | RX Pitch 反馈 |
 
 ## 安全须知
 - 上电后默认 `OFF`，需要遥控切换到对应模式才使能
@@ -62,4 +71,3 @@
 
 ## 废弃说明
 - `Modules/Vision_can.c/.h`：早期 CAN 视觉实现，已被 `vision_link`（USB CDC）取代，未加入 Keil 工程编译，文件保留备查
-- `Algorithm/pid.c/.h`：全项目统一 PID，云台/底盘/射击/IMU 温控共用

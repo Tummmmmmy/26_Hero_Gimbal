@@ -2,7 +2,6 @@
  * @file bsp_buzzer.c
  * @brief 蜂鸣器驱动
  *
- * TIM12_CH2 PWM 驱动蜂鸣器, 按 Buzzer_t 中的模式与次数产生提示音。
  */
 
 #include "bsp_buzzer.h"

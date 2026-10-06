@@ -1,8 +1,7 @@
 /**
  * @file control_task.c
- * @brief 1ms 控制任务(Gimbal_Control_task)
+ * @brief 机器人主控制任务
  *
- * 周期采集 IMU 数据打包, 调用 Robot_Control_Loop 完成整机控制。
  */
 
 #include "control_task.h"
@@ -10,6 +9,7 @@
 #include "INS_task.h"
 #include "robot_control.h"
 #include <string.h>
+
 
 void Gimbal_Control_task(void const * argument)
 {

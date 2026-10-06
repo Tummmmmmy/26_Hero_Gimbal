@@ -6,15 +6,22 @@
 #include "string.h"
 
 
-// 饱和函数: 替代 sgn(s), 在边界层内线性过渡以削减抖振
+/**
+ * @brief  饱和函数 (Saturation Function)
+ * @note   用于替代符号函数 sgn(s) 以减少抖动
+ * @param  x: 输入值
+ * @param  delta: 边界层厚度
+ * @return float: -1.0 到 1.0 之间的值
+ */
 static float sat_func(float x, float delta)
 {
     if (delta <= 0.0f) return (x > 0.0f) ? 1.0f : -1.0f;
-
+    
     if (x > delta) return 1.0f;
     else if (x < -delta) return -1.0f;
     else return x / delta;
 }
+
 
 
 //低通滤波器：让干扰补偿更平滑，电机更安静
@@ -23,6 +30,8 @@ static float low_pass_filter(float input, float prev_output, float ts, float tau
     float alpha = ts / (tau + ts);
     return alpha * input + (1.0f - alpha) * prev_output;
 }
+
+
 
 
 //初始化SMC控制器参数
@@ -42,6 +51,13 @@ void SMC_Init(SMC_Handle_t *pSMC, float C, float K, float Epsilon, float Beta, f
 }
 
 
+
+/**
+ * @brief  执行滑模控制计算
+ * @note   建议放在定时器中断或控制循环中调用
+ * @param  pSMC: 控制器结构体指针
+ * @return float: 控制量输出 (电流/扭矩/电压)
+ */
 float SMC_Calc(SMC_Handle_t *pSMC)
 {
     if(pSMC == 0) return 0.0f;

@@ -2,8 +2,6 @@
  * @file INS_task.c
  * @brief IMU 姿态解算任务
  *
- * 读取 BMI088 原始数据, 完成零偏校准、EKF/Mahony 姿态解算与加热温控,
- * 输出 IMU_Data_t 供控制循环使用。
  */
 
 #include "main.h"

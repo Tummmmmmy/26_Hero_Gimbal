@@ -1,8 +1,7 @@
 /**
  * @file can_receive.h
- * @brief CAN 接收路由接口
+ * @brief CAN 接收模块接口
  *
- * Can_Decode_Task 取出队列中的帧后, 调用 CAN_Rx_Route 分发给各模块。
  */
 
 #ifndef CAN_RECEIVE_H

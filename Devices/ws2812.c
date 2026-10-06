@@ -2,7 +2,6 @@
  * @file ws2812.c
  * @brief WS2812 灯带驱动
  *
- * 用 SPI6 的 MOSI 波形模拟 WS2812 单总线时序, 发送 24bit RGB 颜色。
  */
 
 #include "ws2812.h"

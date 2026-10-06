@@ -4,36 +4,44 @@
  */
 
 #include "chassis_control.h"
-#include "main.h"               // PI
+#include "main.h"
 #include "pid.h"
 #include "Ramp.h"
-#include "shooter_control.h"    // 裁判数据注入
-#include "bsp_DR16.h"           // DR16_SW_UP/MID/DOWN
+#include "shooter_control.h"
+#include "bsp_DR16.h"
 #include <math.h>
 #include <string.h>
 
 #define ABS(x) ((x) > 0 ? (x) : -(x))
 
+//Yaw编码器偏差转换
+static const float YAW_ENCODER_DIFF_TO_DEG = 360.0f / 65536.0f;
+static const float YAW_ENCODER_DIFF_TO_RAD = 2.0f * PI / 65536.0f;
+
+
 //速度上限
-static const float Max_x      = 80.0f;
-static const float Max_y      = 80.0f;
-static const float Max_z      = 80.0f;
-static const float Max_Top_z  = 163.0f;
-static const float KEY_Top_z  = 163.0f;
+static const float CHASSIS_Max_x      = 80.0f;
+static const float CHASSIS_Max_y      = 80.0f;
+static const float CHASSIS_Max_z      = 80.0f;
+static const float CHASSIS_Max_Top_z  = 163.0f;
+static const float CHASSIS_KEY_Top_z  = 163.0f;
+
 
 //底盘跟随PID参数
 static float chassis_follow_kp = 0.2f;//350.0f
 static float chassis_follow_ki = 0.0f;
 static float chassis_follow_kd = 0.0f;
 static float chassis_follow_Integral_Limit = 300.0f;
-static float chassis_follow_MaxOutput = 100.0f;//最大Wz指令值     //50.0f
+static float chassis_follow_MaxOutput = 100.0f;//最大Wz指令值
 static PID_Controller chassis_follow_pid;
 
-//底盘跟随
-static const float kf  = 0.07f;//0.5
-static const float Min = 150.0f;//150
 
-//斜坡滤波
+//底盘跟随参数
+static const float k_follow  = 0.07f;
+static const float follow_min_wz = 150.0f;
+
+
+//斜坡参数 
 static const float Vx_RAMP_K_ACCEL = 200.0f;
 static const float Vx_RAMP_K_DECEL = 1000.0f;
 static const float Vy_RAMP_K_ACCEL = 800.0f;
@@ -41,33 +49,36 @@ static const float Vy_RAMP_K_DECEL = 1000.0f;
 static const float Wz_RAMP_K_ACCEL = 300.0f;
 static const float Wz_RAMP_K_DECEL = 500.0f;
 
+
+//上坎参数
 static const float CLIMB_RAMP_K_ACCEL = 200.0f;
 static const float CLIMB_RAMP_K_DECEL = 1000.0f;
 static const float CLIMB_MAX_SPEED = 60.0f;
 
 static const float climb_target_vx = 60.0f;
 
-//Yaw编码器偏差转换
-static const float YAW_ENCODER_DIFF_TO_DEG = 360.0f / 65536.0f;
-static const float YAW_ENCODER_DIFF_TO_RAD = 2.0f * PI / 65536.0f;
-
-//输出快照
-static Chassis_Output_t output;
 
 //上坎状态
 static Climb_Mode_e climb_mode = CLIMB_MODE_OFF;
 static uint8_t keyboard_climb_cmd = 0;
 static uint8_t climb_cmd = 0;
 
-//战斗模式内部状态(斜坡滤波器/底盘锁定)
+
+//键鼠模式内部状态
 static float chassis_vx_f = 0.0f;
 static float chassis_vy_f = 0.0f;
 static float chassis_wz_f = 0.0f;
-static bool is_chassis_locked = false;  //底盘是否锁死
+static bool is_chassis_locked = false; //底盘是否锁死
 static bool key_Z_last_state = false;
 
-//双板反馈
-static volatile uint8_t robot_color = 2;      //颜色 (0=蓝, 1=红)
+
+//机器人颜色
+static volatile uint8_t robot_color = 2;//(0=蓝, 1=红)
+
+
+//输出信息
+static Chassis_Output_t output;
+
 
 //底盘发给云台的数据包
 typedef union
@@ -88,7 +99,8 @@ typedef union
     } pack;
 } Chassis_To_Gimbal_Msg_t;
 
-//初始化底盘跟随PID与输出快照
+
+//初始化底盘
 void Chassis_Control_Init(void)
 {
     PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, chassis_follow_Integral_Limit, chassis_follow_MaxOutput);
@@ -98,14 +110,16 @@ void Chassis_Control_Init(void)
     climb_mode = CLIMB_MODE_OFF;
 }
 
-//机器人重新使能: 恢复PID限幅
-void Chassis_On_Robot_Start(void)
+
+//底盘使能
+void Chassis_Enable(void)
 {
     PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, chassis_follow_Integral_Limit, chassis_follow_MaxOutput);
 }
 
-//机器人失能: PID限幅清零并停机
-void Chassis_On_Robot_Off(void)
+
+//底盘失能
+void Chassis_Disable(void)
 {
     PID_Init(&chassis_follow_pid, chassis_follow_kp, chassis_follow_ki, chassis_follow_kd, 0, 0);
 
@@ -113,10 +127,10 @@ void Chassis_On_Robot_Off(void)
     output.mode = 0;  output.supercap = 0;
 }
 
-//上坎状态机与上坎/LED指令更新
+
+//更新底盘上坎状态
 void Chassis_Update_Climb(const RC_Data_t* rc, Robot_Mode_e robot_mode, bool e_key_just_pressed)
 {
-    //小陀螺标志每个控制周期复位
     output.shift = 0;
 
     if(robot_mode == ROBOT_MODE_BATTLE)
@@ -192,7 +206,9 @@ void Chassis_Update_Climb(const RC_Data_t* rc, Robot_Mode_e robot_mode, bool e_k
     }
 }
 
-//战斗模式(键鼠)底盘计算
+
+
+//键鼠模式底盘计算
 void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t is_aiming_now, uint8_t is_base_shooting)
 {
     float target_vx = 0.0f;
@@ -236,11 +252,11 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
         {
             output.battle_mode = BATTLE_FOLLOW;
 
-            if(rc->key.map.W && !rc->key.map.G && !rc->key.map.F && !rc->key.map.R) target_vx = Max_x;
-            else if(rc->key.map.S && !rc->key.map.G && !rc->key.map.F && !rc->key.map.R) target_vx = -Max_x;
+            if(rc->key.map.W && !rc->key.map.G && !rc->key.map.F && !rc->key.map.R) target_vx = CHASSIS_Max_x;
+            else if(rc->key.map.S && !rc->key.map.G && !rc->key.map.F && !rc->key.map.R) target_vx = -CHASSIS_Max_x;
 
-            if(rc->key.map.A) target_vy = -Max_y;
-            else if (rc->key.map.D) target_vy = Max_y;
+            if(rc->key.map.A) target_vy = -CHASSIS_Max_y;
+            else if (rc->key.map.D) target_vy = CHASSIS_Max_y;
 
             if(rc->key.map.W && (rc->key.map.A || rc->key.map.D))
             {
@@ -250,7 +266,7 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
 
             if(rc->key.map.SHIFT) //小陀螺
             {
-                target_wz = KEY_Top_z;
+                target_wz = CHASSIS_KEY_Top_z;
                 output.shift = 1;
 
                 target_vx *= 1.1f;
@@ -260,17 +276,17 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
             {
                 if(is_aiming_now == 1 && yaw_encoder_diff * YAW_ENCODER_DIFF_TO_RAD < 45.0f)
                 {
-                    //自瞄且偏差较小时不自旋(保持 target_wz = 0)
+                    //自瞄跟随时偏差较小时不跟随
                 }
                 else
                 {
-                    float follow_Wz = yaw_encoder_diff * -kf;
+                    float follow_Wz = yaw_encoder_diff * -k_follow;
 
                     float calc_Wz = PID_Calculate(&chassis_follow_pid, 0.0f, follow_Wz);
 
                     target_wz = calc_Wz;
 
-                    if(fabsf(target_wz) < Min * 0.01f)
+                    if(fabsf(target_wz) < follow_min_wz * 0.01f)
                     {
                         target_wz = 0.0f;
                     }
@@ -298,6 +314,7 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
     float final_target_vx  = target_vx * cos_yaw_diff + target_vy * sin_yaw_diff;
     float final_target_vy  = -target_vx * sin_yaw_diff + target_vy * cos_yaw_diff;
 
+		
     float ramp_k_vx = 0.0f;;
     if(climb_cmd == 1)//上坎
     {
@@ -314,6 +331,7 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
     {
         ramp_k_vx = (fabs(final_target_vx) > fabs(chassis_vx_f)) ? Vx_RAMP_K_ACCEL : Vx_RAMP_K_DECEL;
     }
+		
     float ramp_k_vy = (fabs(final_target_vy) > fabs(chassis_vy_f)) ? Vy_RAMP_K_ACCEL : Vy_RAMP_K_DECEL;
     float ramp_k_wz = (fabs(target_wz) > fabs(chassis_wz_f)) ? Wz_RAMP_K_ACCEL : Wz_RAMP_K_DECEL;
 
@@ -328,6 +346,10 @@ void Chassis_Update_Battle(const RC_Data_t* rc, float yaw_encoder_diff, uint8_t 
     output.supercap = rc->request_super_cap ? 1 : 0;
 }
 
+
+
+
+
 //常规底盘移动计算
 void Chassis_Update_Move(const RC_Data_t* rc, float yaw_encoder_diff, Chassis_Move_Style_e style)
 {
@@ -336,8 +358,8 @@ void Chassis_Update_Move(const RC_Data_t* rc, float yaw_encoder_diff, Chassis_Mo
     float cos_yaw_diff = cosf(yaw_rad_diff);
     float sin_yaw_diff = sinf(yaw_rad_diff);
 
-    float raw_vx = (float)rc->rc.left_y * RC_TO_ONE * Max_x;
-    float raw_vy = (float)rc->rc.left_x * RC_TO_ONE * Max_y;
+    float raw_vx = (float)rc->rc.left_y * RC_TO_ONE * CHASSIS_Max_x;
+    float raw_vy = (float)rc->rc.left_x * RC_TO_ONE * CHASSIS_Max_y;
 
     float final_vx = raw_vx * cos_yaw_diff + raw_vy * sin_yaw_diff;
     float final_vy = -raw_vx * sin_yaw_diff + raw_vy * cos_yaw_diff;
@@ -349,24 +371,23 @@ void Chassis_Update_Move(const RC_Data_t* rc, float yaw_encoder_diff, Chassis_Mo
     switch(style)
     {
         case CHASSIS_MOVE_GIMBAL_ONLY:
-            //不改自旋, 不请求超级电容
             output.supercap = 0;
             break;
 
         case CHASSIS_MOVE_FOLLOW:
             if(ABS(rc->rc.wheel) > 2 && rc->rc.s_left == DR16_SW_MID) //小陀螺
             {
-                output.wz  = (int16_t)(rc->rc.wheel * RC_TO_ONE  * Max_Top_z * 100.0f);//放大发送保留精度，底盘接收后需要/100
+                output.wz  = (int16_t)(rc->rc.wheel * RC_TO_ONE  * CHASSIS_Max_Top_z * 100.0f);//放大发送保留精度，底盘接收后需要/100
             }
             else//底盘跟随
             {
-                float follow_Wz = yaw_encoder_diff * -kf;
+                float follow_Wz = yaw_encoder_diff * -k_follow;
 
                 float calc_Wz = PID_Calculate(&chassis_follow_pid, 0.0f, follow_Wz);
 
-                output.wz = (int16_t)(calc_Wz * 100.0f); // 放大发送
+                output.wz = (int16_t)(calc_Wz * 100.0f); //放大发送
 
-                if(ABS(output.wz) < Min)
+                if(ABS(output.wz) < follow_min_wz)
                 {
                     output.wz = 0;
                 }
@@ -377,7 +398,7 @@ void Chassis_Update_Move(const RC_Data_t* rc, float yaw_encoder_diff, Chassis_Mo
         case CHASSIS_MOVE_AIMING:
             if(ABS(rc->rc.wheel) > 2 )//&& rc->rc.s_left == RC_SW_MID) //小陀螺
             {
-                output.wz = (int16_t)(rc->rc.wheel * RC_TO_ONE  * Max_Top_z * 1.5f * 100.0f);//放大发送保留精度，底盘接收后需要/100
+                output.wz = (int16_t)(rc->rc.wheel * RC_TO_ONE  * CHASSIS_Max_Top_z * 1.5f * 100.0f);//放大发送保留精度，底盘接收后需要/100
             }
             else
             {
@@ -387,18 +408,20 @@ void Chassis_Update_Move(const RC_Data_t* rc, float yaw_encoder_diff, Chassis_Mo
             break;
 
         case CHASSIS_MOVE_M_AIMING:
-            //不改自旋
             output.supercap = rc->request_super_cap ? 1 : 0;
             break;
     }
 }
 
-//裸底盘计算(不做坐标变换)
+
+
+
+//裸底盘计算
 void Chassis_Set_Direct(const RC_Data_t* rc, Chassis_Direct_Style_e style)
 {
-    float chassis_vx = (float)rc->rc.left_y * RC_TO_ONE * Max_x;
-    float chassis_vy = (float)rc->rc.left_x * RC_TO_ONE * Max_y;
-    float chassis_wz = (float)rc->rc.right_x * RC_TO_ONE * Max_z;
+    float chassis_vx = (float)rc->rc.left_y * RC_TO_ONE * CHASSIS_Max_x;
+    float chassis_vy = (float)rc->rc.left_x * RC_TO_ONE * CHASSIS_Max_y;
+    float chassis_wz = (float)rc->rc.right_x * RC_TO_ONE * CHASSIS_Max_z;
 
     output.vx = (int16_t)(chassis_vx * 100.0f);
     output.vy = (int16_t)(chassis_vy * 100.0f);
@@ -416,44 +439,46 @@ void Chassis_Set_Direct(const RC_Data_t* rc, Chassis_Direct_Style_e style)
     }
 }
 
-//底盘指令清零(发射模式等不动底盘的场景)
+
+//底盘锁定
 void Chassis_Stop_Movement(void)
 {
     output.vx = 0; output.vy = 0; output.wz = 0;
     output.mode = 0; output.supercap = 0;
 }
 
-//上坎时清零横移/自旋(主循环 climb_cmd 后处理)
+//上坎时清零横移/自旋
 void Chassis_Zero_Turn(void)
 {
     output.vy = 0;
     output.wz = 0;
 }
 
-//战斗子状态写入
+//键鼠模式子状态写入
 void Chassis_Set_Battle_Mode(Battle_Mode_e mode)
 {
     output.battle_mode = (uint8_t)mode;
 }
 
-//上坎状态/指令查询
+//获取当前上坎状态
 Climb_Mode_e Chassis_Get_Climb_Mode(void)
 {
     return climb_mode;
 }
 
+//获取当前上坎指令
 uint8_t Chassis_Get_Climb_Cmd(void)
 {
     return climb_cmd;
 }
 
-//获取输出快照(零拷贝只读)
+//获取底盘输出
 const Chassis_Output_t* Chassis_Get_Output(void)
 {
     return &output;
 }
 
-// 更新底盘发来的信息
+//解码底盘发来的双板通信反馈帧
 void Chassis_Decode_Feedback(const uint8_t *data)
 {
     Chassis_To_Gimbal_Msg_t rx_msg;
@@ -464,7 +489,7 @@ void Chassis_Decode_Feedback(const uint8_t *data)
     robot_color        = rx_msg.pack.color;
 }
 
-//己方颜色
+//获取机器人颜色
 uint8_t Chassis_Get_Color(void)
 {
     return robot_color;

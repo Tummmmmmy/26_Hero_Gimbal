@@ -8,7 +8,7 @@
 
 #include "main.h"
 
-// CAN 接收解码任务: 取帧并路由分发
+// CAN接收解码任务
 void Can_Decode_Task(void const * argument);
 
 #endif

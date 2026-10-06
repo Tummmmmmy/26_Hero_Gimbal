@@ -6,7 +6,6 @@
  * @param[out]		input : 输入数据
  * @param[in]		output : 原始数据
  */
-
 void int_Batwolf(int16_t *input,int16_t *output,int16_t* x)
 {
 

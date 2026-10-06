@@ -2,7 +2,6 @@
  * @file vision_link.c
  * @brief 视觉通信模块(USB CDC 虚拟串口)
  *
- * 校验并解析视觉报文, 维护视觉目标数据与在线状态;
  */
 
 #include "vision_link.h"
@@ -36,6 +35,9 @@ extern float gyro[3]; // gyro[0]=pitch_rate, gyro[2]=yaw_rate (rad/s)
 extern float q0, q1, q2, q3;// 四元数 [w,x,y,z]
 
 
+
+
+//视觉通信初始化
 void Vision_Init(void)
 {
     memset(&VisionData, 0, sizeof(VisionData));
@@ -46,6 +48,7 @@ void Vision_Init(void)
 }
 
 
+//判断视觉是否在线
 bool Vision_IsOnline(void)
 {
     if(VisionData.last_update_time == 0) return false;
@@ -67,7 +70,7 @@ void Clear_Vision_Target(void)
 
 volatile uint32_t vision_count = 0;
 
-// 由 usbd_cdc_if.c 的 USB CDC 接收回调在收满一包后调用
+//校验并解析视觉报文
 void Vision_Process_Data(uint8_t *buf, uint32_t len)
 {
     //长度校验 
@@ -127,6 +130,7 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
 }
 
 
+//打包并发送数据给视觉 
 void Vision_Send_Data(void)
 {
     //填充IMU数据

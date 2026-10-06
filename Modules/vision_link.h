@@ -73,30 +73,31 @@ typedef struct
 
 } Vision_Data_t;
 
-/** @brief 视觉目标数据(全局) */
+
+// 全局变量声明
 extern Vision_Data_t VisionData;
 
 
 /** @brief 视觉通信初始化 */
 void Vision_Init(void);
 
-/** @brief 判断视觉是否在线(超时判定) */
+/** @brief 判断视觉是否在线 */
 bool Vision_IsOnline(void);
 
-/** @brief 校验并解析视觉报文, 刷新目标数据 */
+/** @brief 校验并解析视觉报文 */
 void Vision_Process_Data(uint8_t *buf, uint32_t len); 
 
-/** @brief 向视觉发送本机状态(四元数/欧拉角等) */
+/** @brief 打包并发送数据给视觉 */
 void Vision_Send_Data(void); 
 
 
-/** @brief 清除视觉目标与视觉模式 */
+/** @brief 清除目标数据 */
 void Clear_Vision_Target(void);
 
-/** @brief 请求异步重启USB接口(置位标志, 实际重启在任务中执行) */
+/** @brief 异步非阻塞 USB 重启状态机 */
 void Vision_Force_Reconnect_Start(void);
 
-/** @brief USB异步重启状态机(周期调用) */
+/** @brief USB异步重启状态机 */
 void Vision_Reconnect_Task_Async(void);
 
 

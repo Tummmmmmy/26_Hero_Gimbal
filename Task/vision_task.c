@@ -2,7 +2,6 @@
  * @file vision_task.c
  * @brief 视觉通信任务
  *
- * 周期向视觉小电脑发送状态数据; 接收与在线判定在 vision_link 内部完成。
  */
 
 #include "vision_task.h"

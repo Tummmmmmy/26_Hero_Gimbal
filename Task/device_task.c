@@ -2,7 +2,6 @@
  * @file device_task.c
  * @brief 设备指示任务
  *
- * 按系统 LED 状态驱动 WS2812 灯带, 指示当前机器人模式/复位/基地锁定等状态。
  */
 
 #include "device_task.h"
@@ -33,11 +32,11 @@ void Device_task(void)
 							break;
 
 					case LED_STATE_CLIMB_FRONT:
-//              WS2812_Set_Colour(0, 255, 255); //青色
+
 							break;
 
 					case LED_STATE_CLIMB_BACK:
-//							WS2812_Set_Colour(0, 255, 255); //青色
+
 							break;
 
 
@@ -63,21 +62,6 @@ void Device_task(void)
 							break;
 					}
 
-
-					//WS2812_Set_Colour(0, 255, 0);纯绿色
-					//WS2812_Set_Colour(0, 150, 0);暗绿色
-					//WS2812_Set_Colour(10, 80, 0); 冰蓝色
-					//WS2812_Set_Colour(200, 200, 0);白色
-					//WS2812_Set_Colour(255, 100, 0);橙色
-					//WS2812_Set_Colour(200, 20, 0); 粉色
-					//WS2812_Set_Colour(255, 20, 0);粉色
-
-
-					//WS2812_Do_Breathe(200, 200, 0, 4);白色呼吸灯//超电?
-					//WS2812_Do_Breathe(255, 255, 0, 5);黄色呼吸灯
-					//WS2812_Do_Breathe(0, 255, 0, 5);绿色呼吸灯
-					//WS2812_Do_Breathe(255, 0, 0, 3);红色呼吸灯
-
 					default:
 							WS2812_Set_Colour(255, 0, 0);
 							osDelay(50);
@@ -90,7 +74,7 @@ void Device_task(void)
 
 
 /**
-  * @brief  实现一次完整的呼吸灯效果 (由暗到亮再到暗)
+  * @brief  实现一次完整的呼吸灯效果
   * @param  r, g, b: 呼吸灯的目标颜色
   * @param  delay_ms: 每一步亮度变化的延时，值越小，呼吸越快
   */

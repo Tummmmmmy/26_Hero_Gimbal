@@ -8,6 +8,8 @@
 
 static float separation_threshold = 0.0f;
 
+
+//初始化PID参数
 void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float Integral_Limit, float MaxOutput)
 {
     memset(pid, 0, sizeof(PID_Controller));
@@ -21,6 +23,7 @@ void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float Integral_
 }
 
 
+//位置式PID计算
 float PID_Calculate(PID_Controller *pid, float target, float measured )
 {
     pid->target = target;
@@ -49,7 +52,7 @@ float PID_Calculate(PID_Controller *pid, float target, float measured )
 
 
 
-
+//位置式PID(积分分离、微分先行)
 float PID_Cal_Enhanced(PID_Controller *pid, float target, float measured)
 {
 	  pid->target = target;
@@ -84,7 +87,7 @@ float PID_Cal_Enhanced(PID_Controller *pid, float target, float measured)
 
 
 
-
+//增量式PID计算
 float PID_Cal_Increment(PID_Controller *pid, float target, float measured)
 {
     pid->target = target;

@@ -8,7 +8,6 @@
   * @param  ramp:  每调用一次的最大变化量 (斜率)
   * @retval        计算后的新当前值
   */
-
 float RAMP_float(float final, float now, float ramp)
 {
     float buffer = final - now;

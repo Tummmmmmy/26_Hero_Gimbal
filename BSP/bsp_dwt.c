@@ -2,7 +2,6 @@
  * @file bsp_dwt.c
  * @brief DWT 微秒级计时
  *
- * 基于内核 DWT 计数器, 用于测量任务实际运行周期与代码耗时。
  */
 
 #include "bsp_dwt.h"

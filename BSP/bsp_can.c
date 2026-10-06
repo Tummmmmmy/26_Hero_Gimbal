@@ -1,14 +1,13 @@
 /**
  * @file bsp_can.c
- * @brief FDCAN 硬件抽象层：初始化与接收中断
+ * @brief FDCAN 硬件抽象层
  *
- * 负责 FDCAN 外设配置与底层收帧
  */
 
 #include "bsp_can.h"
 #include <string.h>
 
-// FDCAN 通信初始化：配置滤波器、启动三个 FDCAN、开启 RX FIFO0 接收中断
+//FDCAN通信初始化
 void BSP_FDCAN_Config(void)
 {
     FDCAN_FilterTypeDef sFilterConfig;
@@ -40,7 +39,7 @@ void BSP_FDCAN_Config(void)
 }
 
 
-// CAN 接收中断回调：收到标准帧后放入 canRxQueue
+//CAN接收中断回调
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
     FDCAN_RxHeaderTypeDef rx_header;
@@ -66,7 +65,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 }
 
 
-// 底层发送一帧：标准帧 + Classic CAN，TX FIFO 有空位时写入
+//底层发送一帧
 void BSP_CAN_Send(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, uint8_t* data, uint32_t dlc)
 {
     FDCAN_TxHeaderTypeDef TxHeader;

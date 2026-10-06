@@ -2,7 +2,6 @@
  * @file remote_control.h
  * @brief 遥控器输入统一接口
  *
- * 定义统一的遥控数据结构 RC_Data_t 与控制源枚举, 屏蔽 DR16/VT03 差异。
  */
 
 #ifndef REMOTE_CONTROL_H
@@ -12,10 +11,10 @@
 #include <stdbool.h>
 
 
-//遥控杆量到归一化[-1,1]的缩放系数(杆量范围约+-660)
+//遥控杆量归一化
 #define RC_TO_ONE (1.0f / 660.0f)
 
-/** @brief 统一的遥控器数据结构体(DR16 / VT03 共用) */
+/** @brief 统一的遥控器数据结构体 */
 typedef struct {
 
     struct {

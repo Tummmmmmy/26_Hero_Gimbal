@@ -2,7 +2,6 @@
  * @file bsp_VT03.c
  * @brief VT03 图传遥控驱动
  *
- * UART1 接收 VT03 遥控帧, 校验帧头与 CRC16 后解析键鼠/拨杆数据。
  */
 
 #include "bsp_VT03.h"

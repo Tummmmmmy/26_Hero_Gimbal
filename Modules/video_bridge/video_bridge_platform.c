@@ -2,7 +2,6 @@
  * @file video_bridge_platform.c
  * @brief 图传桥接的平台相关实现
  *
- * UART7 DMA 收数与写入位置查询、毫秒时基、0x0310 自定义帧发送。
  */
 
 #include "video_bridge_platform.h"
@@ -113,6 +112,7 @@ static void Local_Append_CRC16(uint8_t *pchMessage, uint32_t dwLength)
 }
 
 
+//启动视觉串口 DMA 接收
 void bridge_platform_uart_start_rx_dma(uint8_t* buffer, size_t size) 
 {
     // 1. 强行终止之前可能因为乱码卡死的任何接收状态
@@ -127,6 +127,9 @@ void bridge_platform_uart_start_rx_dma(uint8_t* buffer, size_t size)
 }
 
 
+
+
+//获取 DMA 当前写入位置
 size_t bridge_platform_uart_rx_write_index(void) 
 {
     // 刷新 L1 Cache，强制 CPU 从物理 RAM 读取最新数据
@@ -138,6 +141,9 @@ size_t bridge_platform_uart_rx_write_index(void)
 
 }
 
+
+
+//获取系统毫秒级时间
 uint32_t bridge_platform_tick_ms(void) 
 {
     return osKernelGetTickCount();
@@ -195,10 +201,13 @@ bool bridge_platform_send_custom_0310(const uint8_t* data, uint16_t size)
 }
 
 
+
+
 void Video_Bridge_Reset(void)
 {
     bridge_platform_uart_start_rx_dma(g_bridge.rx_dma_buffer, sizeof(g_bridge.rx_dma_buffer));
 }
+
 
 
 void bridge_platform_debug_log(const char* message) 

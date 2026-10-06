@@ -110,13 +110,6 @@ const osThreadAttr_t VisionTask_attributes = {
   .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for CanTransmitTask */
-osThreadId_t CanTransmitTaskHandle;
-const osThreadAttr_t CanTransmitTask_attributes = {
-  .name = "CanTransmitTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
 /* Definitions for AnoPrintTask */
 osThreadId_t AnoPrintTaskHandle;
 const osThreadAttr_t AnoPrintTask_attributes = {

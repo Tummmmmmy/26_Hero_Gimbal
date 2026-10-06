@@ -2,7 +2,6 @@
  * @file bsp_ano_protocol.c
  * @brief 匿名上位机 & VOFA+ 通信协议模块实现
  *
- * 本模块在打印任务中完成打包, 经 UART DMA 发出, 发送完成由中断回调善后。
  */
 
 #include "bsp_ano_protocol.h"
@@ -23,12 +22,13 @@
 
 __align(32) static uint8_t tx_buffer[TX_BUFFER_SIZE];
 
-//FreeRTOS对象句柄
-extern osMessageQueueId_t anoPrintQueueHandle; //队列句柄，由freertos.c定义
+extern osMessageQueueId_t anoPrintQueueHandle;
 
 
 // ======================== 底层协议打包与发送函数 ========================
-// 按消息类型打包并启动 UART DMA 发送
+
+
+//根据消息类型，打包并启动DMA发送
 static void Pack_And_Send_DMA(const Print_Msg_t* msg)
 {
     uint16_t frame_len = 0;
@@ -90,6 +90,8 @@ static void Pack_And_Send_DMA(const Print_Msg_t* msg)
 
 // ======================== 供外部调用的“生产者”函数 ========================
 
+
+//打印匿名助手的波形
 void ANO_Print_Wave(uint8_t frame_id, uint8_t num_floats, ...)
 {
     if(num_floats == 0 || num_floats > MAX_WAVE_FLOATS) return;
@@ -113,6 +115,8 @@ void ANO_Print_Wave(uint8_t frame_id, uint8_t num_floats, ...)
 }
 
 
+
+//打印VOFA+波形
 void VOFA_Print_Wave(uint8_t num_floats, ...)
 {
     if(num_floats == 0 || num_floats > 20) return;
@@ -142,7 +146,8 @@ void VOFA_Print_Wave(uint8_t num_floats, ...)
 
 // ======================== RTOS 任务与回调函数实现 ========================
 
-// 打印任务: 等队列消息与发送完成信号量, 交给底层打包发送
+
+//统一的打印任务
 void Print_Task(void const *argument)
 {
     //1.在任务开始时，先获取一次信号量，使计数值变为0，确保第一次发送前，信号量是不可用的
@@ -166,7 +171,7 @@ void Print_Task(void const *argument)
 }
 
 
-// UART DMA 发送完成回调: 释放信号量唤醒打印任务
+//UART发送完成中断回调函数
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
     //判断是否是匿名通信的串口

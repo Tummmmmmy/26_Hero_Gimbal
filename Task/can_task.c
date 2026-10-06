@@ -1,8 +1,7 @@
 /**
  * @file can_task.c
- * @brief CAN 接收解码任务(Can_Decode_Task)
+ * @brief CAN 接收解码任务
  *
- * 从 canRxQueue 取帧, 交给 can_receive 路由分发。
  */
 
 #include "can_task.h"

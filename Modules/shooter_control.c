@@ -1,6 +1,6 @@
 /**
  * @file shooter_control.c
- * @brief 射击控制模块：摩擦轮、拨盘、弹速统计与热量管理
+ * @brief 发射控制模块实现
  */
 
 #include "main.h"
@@ -9,47 +9,61 @@
 #include "robot_mode.h"
 #include "pid.h"
 #include "shooter_control.h"
-#include "bsp_DR16.h"      // DR16_SW_UP/MID/DOWN
-#include "vision_link.h"   // 视觉开火条件(VisionData)
+#include "bsp_DR16.h"
+#include "vision_link.h"
 #include <math.h>
 #include <string.h>
 
-// 射击模块私有状态(全部 static, 仅本模块可见)
-// ===== 发射机构私有类型 =====
+
+
+//发射状态枚举
 typedef enum
 {
-    SHOOTER_OFF,
-    SHOOTER_CALIBRATING,
-    SHOOTER_READY,
-    SHOOTER_SINGLE_SHOT,
-    SHOOTER_JAMMED
+    SHOOTER_OFF,            //关闭
+    SHOOTER_CALIBRATING,    //校准
+    SHOOTER_READY,          //准备
+    SHOOTER_SINGLE_SHOT,    //单发
+    SHOOTER_JAMMED          //卡弹处理
 } Shooter_State_e;
 
-typedef enum
+
+
+//实弹检测状态
+typedef enum 
 {
     SHOT_NOT_DETECTED = 0,
-    SHOT_DETECTED = 1
+    SHOT_DETECTED = 1        //检测到实弹
 } Shot_Detection_e;
 
+
+//发射控制结构体
 typedef struct
 {
-    Shooter_State_e state;
-    float friction_target_speed;
-    float friction_linear_ratio;
-    float dial_target_rad;
-    float dial_last_normal_rad;
-
-    uint8_t single_shot_fired_flag;
-    uint16_t continuous_fire_timer;
-    uint16_t jam_detect_timer;
-    uint16_t jam_timeout_timer;
-    uint8_t jam_process_step;
-    uint8_t is_calibrated;
-    uint8_t homing_step;
-    uint16_t homing_timer;
+    Shooter_State_e state;       //当前状态
+    float friction_target_speed; //目标速度(rpm)
+	  float friction_linear_ratio; //线速度比例
+	  uint8_t friction_state;      //是否开启摩擦轮 0:关闭, 1:开启
+    
+    float dial_target_rad;     //拨盘的目标角度
+    float dial_last_normal_rad;//上一次正常的位置
+    
+    uint8_t single_shot_fired_flag;//单发已触发标志位
+    
+    uint16_t continuous_fire_timer; //连发频率计时器
+    
+	  
+    uint16_t jam_detect_timer;   //卡弹检测计时器
+    uint16_t jam_timeout_timer;  //卡弹处理超时计时器
+	  uint8_t jam_process_step;    //0:正在退, 1:正在等
+	
+	  uint8_t is_calibrated;      //是否已完成校准
+    uint8_t homing_step;        //校准步骤(0:找限位, 1:回退固定距离)
+    uint16_t homing_timer;      //校准计时器
+    
 } Shooter_Controller_t;
 
-// ===== 发射机构私有状态与电机对象 =====
+
+
 static Motor_Controller dial_motor;
 static Motor_Controller friction_motor_inner_left;
 static Motor_Controller friction_motor_inner_right;
@@ -58,8 +72,8 @@ static Motor_Controller friction_motor_outer_left;
 static Motor_Controller friction_motor_outer_right;
 static Motor_Controller friction_motor_outer_up;
 
-// ===== 摩擦轮电机表 =====
-// 顺序固定: 内左, 内右, 内上, 外左, 外右, 外上
+
+//摩擦轮电机
 enum
 {
     FRIC_INNER_LEFT = 0,
@@ -70,13 +84,12 @@ enum
     FRIC_OUTER_UP,
     FRIC_MOTOR_NUM
 };
-
 typedef struct
 {
-    Motor_Controller* motor;   //电机对象
-    int8_t  dir;               //安装方向: 1=与目标转速同向, -1=反向
-    uint8_t is_outer;          //0=一级(内圈), 1=二级(外圈)
-    float   ready_speed;       //判定已转起来的转速阈值
+		Motor_Controller* motor;   //电机对象
+		int8_t  dir;               //转速方向: 1:正向, -1:反向
+		uint8_t is_outer;          //0:一级, 1:二级
+		float   ready_speed;       //判定已转起来的转速阈值
 } Friction_Motor_t;
 
 static const Friction_Motor_t friction_motors[FRIC_MOTOR_NUM] =
@@ -89,82 +102,64 @@ static const Friction_Motor_t friction_motors[FRIC_MOTOR_NUM] =
     { &friction_motor_outer_up,     1, 1, 800.0f },
 };
 
+
 static Shooter_Controller_t shooter_controller;
 static Shot_Detection_e current_shot_status = SHOT_NOT_DETECTED;
+static Shooter_Mode_e last_fric_mode = SHOOTER_MODE_OFF;//上次摩擦轮档位
 
-static float ratio = 0.784f;
-static float low_ratio = 0.56f;
-static float dial_back = 0.445f;
-static uint32_t high_speed = 4450.0f;
-static uint32_t low_speed = 3210.0f;
 
-static volatile uint16_t shooter_heat = 0;
-static volatile uint16_t heat_limit = 100;
-static volatile uint16_t shooter_cooling = 20;
-static volatile float initial_speed = 0.0f;
-static float shooter_predict_heat = 0.0f;
-static uint32_t last_shoot_time = 0;
+//热量参数
+static volatile uint16_t shooter_heat = 0;    //当前热量
+static volatile uint16_t heat_limit = 100;    //热量上限
+static volatile uint16_t shooter_cooling = 20;//冷却速率
+static volatile float initial_speed = 0.0f;   //弹速
+static float shooter_predict_heat = 0.0f;     //预测热量
+static uint32_t last_shoot_time = 0;          //上次发射时间
+static bool use_referee_heat_limit = false;   //是否热量控制
+static uint32_t shot_interval_ms = 200;       //两次发弹的最小间隔
 
-static float friction_speed_kp_inner_high = 4.0f;
-static float friction_speed_ki_inner_high = 0.0f;
-static float friction_speed_kd_inner_high = 0.0f;
-static float friction_speed_kp_outer_high = 10.0f;
-static float friction_speed_ki_outer_high = 0.0f;
-static float friction_speed_kd_outer_high = 0.0f;
-static float friction_speed_kp_inner_low = 8.0f;
-static float friction_speed_ki_inner_low = 0.0f;
-static float friction_speed_kd_inner_low = 0.0f;
-static float friction_speed_kp_outer_low = 10.0f;
-static float friction_speed_ki_outer_low = 0.0f;
-static float friction_speed_kd_outer_low = 0.0f;
-static const float friction_speed_Integral_Limit = 50.0f;
-static const float friction_speed_MaxOutput = 16380.0f;
-static Shooter_Mode_e last_fric_mode = SHOOTER_MODE_OFF;   //上次已写入PID参数的摩擦轮档位
 
-static const float dial_angle_kp = 12.0f;
-static const float dial_angle_ki = 0.0f;
-static const float dial_angle_kd = 0.0f;
-static const float dial_angle_Integral_Limit = 1.0f;
-static const float dial_angle_MaxOutput = 25.0f;
-static const float dial_speed_kp = 0.3f;
-static const float dial_speed_ki = 0.0f;
-static const float dial_speed_kd = 0.0f;
-static const float dial_speed_Integral_Limit = 2.0f;
-static const float dial_speed_MaxOutput = 5.0f;
-
-static uint32_t shot_interval_ms = 200;   //两次发弹的最小间隔(ms)
-static bool use_referee_heat_limit = false;
-static bool robot_off = true;   // 由 Update 每周期从 ctx->robot_mode 同步
+static uint8_t fric_level = 0;          //0:关, 1:12m/s, 2:16m/s
+static bool robot_off = true;
 static uint8_t dial_enable_pending = 0;
 static uint8_t dial_disable_pending = 0;
 static Shooter_Output_t output;
+static Shooter_Debug_Data_t debug;
 
-// 射击档位与按键边沿状态(F/G 键切换摩擦档属于射击机构自身功能)
-static uint8_t fric_level = 0;   // 0:关, 1:12m/s, 2:16m/s
+//按键状态
 static bool f_key_last = false;
 static bool g_key_last = false;
 static bool mouse_l_last_state = false;
 static bool mouse_m_last_state = false;
 
-// 本周期射击决策结果(模块私有)
+
 static struct {
-    uint8_t fire_command;      // 开火指令: 1=开火, 0=停止
-    Shooter_Mode_e fric_mode;  // 摩擦轮模式
+    uint8_t fire_command;      //开火指令: 1=开火, 0=停止
+    Shooter_Mode_e fric_mode;  //摩擦轮模式
 } fric_cmd;
-static Shooter_Debug_Data_t debug;
 
-static const float RAD_TO_DEG = 180.0f / PI;
 
+
+
+
+// 取绝对值
+#define ABS(x) ((x) > 0 ? (x) : -(x))
+
+//拨盘id
 #define DM_DIAL_SEND_ID 0x07
 #define DM_DIAL_RECEIVE_ID 0x17
 #define RX_DIAL_FDB_ID 0x302
 
+//二级摩擦轮id
 #define FRICTION_OUTER_LEFT_ID  1
 #define FRICTION_OUTER_RIGHT_ID 2
 #define FRICTION_OUTER_UP_ID    3
+
+//一级摩擦轮id
 #define FRICTION_INNER_LEFT_ID  5
 #define FRICTION_INNER_RIGHT_ID 6
 #define FRICTION_INNER_UP_ID    7
+
 
 #define DM4340_DIAL_T_MIN -12.0f
 #define DM4340_DIAL_T_MAX 12.0f
@@ -176,39 +171,94 @@ static float uint_to_float(int x_int, float x_min, float x_max, int bits)
     return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
 }
 
+static const float RAD_TO_DEG = 180.0f / PI;
 
-// 取绝对值
-#define ABS(x) ((x) > 0 ? (x) : -(x))
 
-// 摩擦轮目标转速与线速度比例
+
+//摩擦轮目标转速与线速度比例
+//16.5m/s
+static uint32_t high_speed = 4450.0f;
+static float high_ratio = 0.784f;
 #define FRICTION_TARGET_SPEED_HIGH high_speed
-#define FRICTION_RATIO_HIGH ratio
+#define FRICTION_RATIO_HIGH        high_ratio
+
+//12m/s
+static uint32_t low_speed = 3210.0f;
+static float low_ratio = 0.56f;
 #define FRICTION_TARGET_SPEED_LOW  low_speed
 #define FRICTION_RATIO_LOW        low_ratio
+
 
 // 摩擦轮半径
 #define WHEEL_RADIUS_INNER  35.0f // 内圈半径
 #define WHEEL_RADIUS_OUTER  35.0f // 外圈半径
 
-// 拨盘单发编码器增量
-#define DIAL_ONE_SHOOT_ENCODER PI / 3.0f
 
-// 卡弹检测阈值
-#define DIAL_JAM_CURRENT_THRESHOLD 6.0f
-#define DIAL_JAM_SPEED_THRESHOLD 1.5f
-#define DIAL_JAM_DETECT_THRESHOLD 100
-#define DIAL_JAM_WAIT_TIME 400
 
-// 校准回中参数
-#define DIAL_HOMING_SPEED -2.2f
-#define DIAL_HOMING_CURRENT_THRESHOLD 1.0f
-#define DIAL_HOMING_SPEED_THRESHOLD 2.05f
-#define DIAL_HOMING_OFFSET dial_back
-#define DIAL_HOMING_CHECK_DELAY 200
 
-// 热量管理
-#define HERO_HEAT_PER_SHOT 100.0f
-#define HEAT_SAFETY_MARGIN 5.0f
+//拨盘
+#define DIAL_ONE_SHOOT_ENCODER PI / 3.0f //单发编码器值
+
+//卡弹检测参数
+#define DIAL_JAM_CURRENT_THRESHOLD 6.0f     //判定卡弹的电流阈值
+#define DIAL_JAM_SPEED_THRESHOLD 1.5f       //判定卡弹的速度阈值(rpm)
+#define DIAL_JAM_DETECT_THRESHOLD 100       //持续100ms判定为卡弹
+#define DIAL_JAM_WAIT_TIME 400              //回退后等待400ms
+
+
+//校准参数
+static float dial_back = 0.445f;
+#define DIAL_HOMING_SPEED -2.2f  //-2.5      //反转速度    2.2f
+#define DIAL_HOMING_CURRENT_THRESHOLD 1.0f   //撞限位的电流阈值   0.75f
+#define DIAL_HOMING_SPEED_THRESHOLD 2.05f    //撞限位的速度阈值     1.1f
+#define DIAL_HOMING_OFFSET dial_back         //撞限位后回退距离
+#define DIAL_HOMING_CHECK_DELAY 200          //刚启动反转时忽略电流检测的时间，防误判
+
+
+//热量管理
+#define HERO_HEAT_PER_SHOT 100.0f           //英雄每发热量
+#define HEAT_SAFETY_MARGIN 5.0f             //安全余量(两发间隔)
+
+
+
+//拨盘电机PID参数
+//位置环
+static const float dial_angle_kp = 12.0f;
+static const float dial_angle_ki = 0.0f;
+static const float dial_angle_kd = 0.0f;
+static const float dial_angle_Integral_Limit = 1.0f;
+static const float dial_angle_MaxOutput = 25.0f;
+
+//速度环
+static const float dial_speed_kp = 0.3f;
+static const float dial_speed_ki = 0.0f;
+static const float dial_speed_kd = 0.0f;
+static const float dial_speed_Integral_Limit = 2.0f;
+static const float dial_speed_MaxOutput = 5.0f;
+
+
+//摩擦轮电机PID参数
+//16.5m/s
+static float friction_speed_kp_inner_high = 4.0f;
+static float friction_speed_ki_inner_high = 0.0f;
+static float friction_speed_kd_inner_high = 0.0f;
+static float friction_speed_kp_outer_high = 10.0f;
+static float friction_speed_ki_outer_high = 0.0f;
+static float friction_speed_kd_outer_high = 0.0f;
+
+//12m/s
+static float friction_speed_kp_inner_low = 8.0f;
+static float friction_speed_ki_inner_low = 0.0f;
+static float friction_speed_kd_inner_low = 0.0f;
+static float friction_speed_kp_outer_low = 10.0f;
+static float friction_speed_ki_outer_low = 0.0f;
+static float friction_speed_kd_outer_low = 0.0f;
+
+static const float friction_speed_Integral_Limit = 50.0f;
+static const float friction_speed_MaxOutput = 16380.0f;
+
+
+
 
 
 //检查摩擦轮是否全部就绪
@@ -235,8 +285,8 @@ static uint8_t Check_Friction_Ready(void)
 //弹速自适应控制参数
 #define SPEED_TARGET_HIGH      16.3f  //弹速上限(超过此值减速)
 #define SPEED_TARGET_LOW       16.1f  //弹速下限(低于此值加速)
-#define RPM_ADJUST_STEP        5.0f  //摩擦轮每次微调的步进(RPM)  //5
-#define MAX_AUTO_OFFSET        0.0f //最大允许补偿值          //25
+#define RPM_ADJUST_STEP        5.0f   //摩擦轮每次微调的步进(RPM)  //5
+#define MAX_AUTO_OFFSET        0.0f   //最大允许补偿值          //25
 
 #define MAX_WINDOW_SIZE        80
 
@@ -256,8 +306,8 @@ static float speed_window[MAX_WINDOW_SIZE] = {0};
 static uint8_t high_speed_count = 0;    //连续超速计数器
 static uint8_t low_speed_count = 0;     //连续低速计数器
 static float last_referee_speed = 0.0f; //上一次的弹速
-static uint32_t shoot_seq_cnt = 0; //记录一轮射击打到了第几发
-static float pending_speed = 0.0f; //暂存上一发的弹速
+static uint32_t shoot_seq_cnt = 0;      //记录一轮射击打到了第几发
+static float pending_speed = 0.0f;      //暂存上一发的弹速
 
 
 //统计弹速数据
@@ -296,6 +346,7 @@ static void process_new_bullet_speed(float new_speed)
 }
 
 
+//重置统计
 void Shooter_Reset_Stats(void)
 {
     //清空滑动窗口数组
@@ -368,7 +419,7 @@ static void Bullet_Speed_Adaptive_Process(void)
 							  //更新统计数据
                 process_new_bullet_speed(pending_speed);
 							  //弹速自调整
-                Bullet_Speed_Adaptive_Control(pending_speed);
+//                Bullet_Speed_Adaptive_Control(pending_speed);
             }
         }
 				pending_speed = initial_speed;
@@ -433,24 +484,23 @@ static void Dial_Recover_Process(void)
 }
 
 
-#define USE_AUTO_CALIBRATION 1 //1:开启撞限位校准, 0:关闭校准(当前位置为零点)
+#define USE_AUTO_CALIBRATION 1 //1:开启撞限位校准, 0:关闭校准
 
-// ===== 摩擦轮档位参数 =====
-// 目标转速/线速度比例支持在线微调(Shooter_Tune_High/Low_Speed), 故每周期按当前档位取值
+//摩擦轮参数
 typedef struct
 {
-    float target_speed;              //二级(外圈)目标转速
-    float linear_ratio;              //一级/二级线速度比例
-    float kp_offs_inner_left;        //内圈左轮 Kp 偏置
-    float kp_offs_inner_right;       //内圈右轮 Kp 偏置
+    float target_speed;              //二级目标转速
+    float linear_ratio;              //线速度比例
+    float kp_offs_inner_left;        //一级左轮Kp偏置
+    float kp_offs_inner_right;       //一级右轮Kp偏置
     float kp_inner, ki_inner, kd_inner;
     float kp_outer, ki_outer, kd_outer;
 } Friction_Param_t;
 
-// 取当前档位对应的摩擦轮参数
+
+//更新摩擦轮参数
 static Friction_Param_t Friction_Get_Param(Shooter_Mode_e mode)
 {
-    //OFF档不驱动摩擦轮: 参数全为0
     Friction_Param_t param = { 0 };
 
     if (mode == SHOOTER_MODE_LOW_SPEED)
@@ -481,11 +531,10 @@ static Friction_Param_t Friction_Get_Param(Shooter_Mode_e mode)
         param.ki_outer = friction_speed_ki_outer_high;
         param.kd_outer = friction_speed_kd_outer_high;
     }
-
     return param;
 }
 
-// 按档位参数写一次摩擦轮PID参数, 并清积分(仅换档时调用)
+//写入摩擦轮参数
 static void Friction_Write_Params(const Friction_Param_t* param)
 {
     for (uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
@@ -493,12 +542,11 @@ static void Friction_Write_Params(const Friction_Param_t* param)
         Motor_Controller* motor = friction_motors[i].motor;
         uint8_t is_outer = friction_motors[i].is_outer;
 
-        //一级(内圈)与二级(外圈)各用一组PID参数
         float kp = is_outer ? param->kp_outer : param->kp_inner;
         float ki = is_outer ? param->ki_outer : param->ki_inner;
         float kd = is_outer ? param->kd_outer : param->kd_inner;
 
-        //内圈左右轮允许单独给Kp偏置
+        //一级Kp偏置
         if (i == FRIC_INNER_LEFT)       kp += param->kp_offs_inner_left;
         else if (i == FRIC_INNER_RIGHT) kp += param->kp_offs_inner_right;
 
@@ -531,18 +579,16 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 	  //拨盘电机重新上电处理
 	  Dial_Recover_Process();
 
-    //本周期输入翻译: F/G 键边沿、档位、开火条件(模块内部完成)
+    //更新外部输入
     Shooter_Update_Cmd_From_Input(ctx);
     uint8_t fire_command = fric_cmd.fire_command;
 
-    // ===== 本周期摩擦轮档位参数(目标转速/线速度比例/PID) =====
+	
+    //档位变化时更新并写入摩擦轮参数
     Friction_Param_t fric_param = Friction_Get_Param(fric_cmd.fric_mode);
-
-    //档位变化时才写一次PID参数并清积分
     if(fric_cmd.fric_mode != last_fric_mode)
     {
         Friction_Write_Params(&fric_param);
-
         last_fric_mode = fric_cmd.fric_mode;
     }
 
@@ -801,29 +847,25 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 					//二级目标转速
 					float target_rpm_outer = shooter_controller.friction_target_speed;
 
-					//弹速自调整
 					Bullet_Speed_Adaptive_Process();
 
 					//一级目标转速
 					float target_rpm_inner = target_rpm_outer * (WHEEL_RADIUS_OUTER / WHEEL_RADIUS_INNER) * shooter_controller.friction_linear_ratio;
 
 
-					//摩擦轮目标转速与目标电流
-					for (uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
+					//摩擦轮PID计算
+					for(uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
 					{
-						Motor_Controller* motor = friction_motors[i].motor;
-						float base_rpm = friction_motors[i].is_outer ? target_rpm_outer : target_rpm_inner;
+							Motor_Controller* motor = friction_motors[i].motor;
+							float base_rpm = friction_motors[i].is_outer ? target_rpm_outer : target_rpm_inner;
 
-						//右轮反向旋转
-						motor->target_speed = (friction_motors[i].dir > 0) ? base_rpm : -base_rpm;
-
-						motor->target_current = (int16_t)PID_Calculate(&motor->pid_speed, motor->target_speed, (float)motor->feedback.actual_speed);
+							motor->target_speed = (friction_motors[i].dir > 0) ? base_rpm : -base_rpm;
+							motor->target_current = (int16_t)PID_Calculate(&motor->pid_speed, motor->target_speed, (float)motor->feedback.actual_speed);
 					}
 			}
 			else
 			{
-					//摩擦轮停转: 目标电流清零, 并清空积分/微分记忆
-					for (uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
+					for(uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
 					{
 						Motor_Controller* motor = friction_motors[i].motor;
 
@@ -832,12 +874,8 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
 						motor->pid_speed.pre_error = 0.0f;
 					}
 			}
+		  output.friction_ready = (Check_Friction_Ready() == 1 && shooter_controller.friction_target_speed > 200.0f) ? 1 : 0;
 
-		// 摩擦轮是否已转起来（供主循环上报底盘档位时使用）
-		output.friction_ready = (Check_Friction_Ready() == 1 && shooter_controller.friction_target_speed > 200.0f) ? 1 : 0;
-
-			
-			
 			
 //		//MIT力矩控制
 //    if(shooter_controller.state != SHOOTER_OFF)
@@ -905,7 +943,8 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
     }
     dial_motor.target_total_angle = shooter_controller.dial_target_rad;
 
-    // 输出快照，主调度器统一执行 CAN 发送
+		
+    //输出
     output.dial_target_speed = dial_motor.target_speed;
     output.friction_current_inner_left = friction_motor_inner_left.target_current;
     output.friction_current_inner_right = friction_motor_inner_right.target_current;
@@ -915,18 +954,16 @@ void Shooter_Control_Update(const Shooter_Context_t *ctx)
     output.friction_current_outer_up = friction_motor_outer_up.target_current;
     output.friction_target_speed = shooter_controller.friction_target_speed;
 
-    // 拨盘使能/失能指令（0=无需发送，0xFC=使能，0xFD=失能）
-    if (dial_disable_pending)
+    if(dial_disable_pending)
     {
         output.dial_mode_cmd = 0xFD;
         dial_disable_pending = 0;
     }
-    else if (dial_enable_pending)
+    else if(dial_enable_pending)
     {
         output.dial_mode_cmd = 0xFC;
         dial_enable_pending = 0;
     }
-    // 机器人未失能且拨盘尚未使能时，持续补发使能帧
     else if (!(ctx->robot_mode == ROBOT_MODE_OFF) && shooter_controller.state != SHOOTER_OFF && dial_motor.state != 1)
     {
         output.dial_mode_cmd = 0xFC;
@@ -977,7 +1014,6 @@ static void Shooter_Check_Real_Fire(void)
     uint8_t is_s1_drop = (target_rpm_inner - s1_avg_speed) > 200.0f;
     uint8_t is_s2_drop = (target_rpm_outer - s2_avg_speed) > 50.0f;
 
-		//如果同时掉速
     if(is_s2_drop)
     {
         current_shot_status = SHOT_DETECTED;
@@ -1013,7 +1049,7 @@ static void Shooter_Update_Heat(void)
 		}
 		else
 		{
-				cooling_rate = 10000.0f;//(float)shooter_cooling;
+				cooling_rate = 10000.0f;
 		}
 
 
@@ -1054,6 +1090,9 @@ static uint8_t Shooter_Check_Heat_Allowed(void)
 }
 
 
+
+
+
 // ===== 对外 API =====
 
 static void Shooter_Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_HandleTypeDef* hfdcan)
@@ -1070,7 +1109,7 @@ static void Shooter_Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_Handl
     motor->target_speed = 0.0f;
     motor->target_current = 0;
 }
-
+//初始化发射
 void Shooter_Control_Init(void)
 {
     Shooter_Motor_Init(&dial_motor, DM_DIAL_SEND_ID, &hfdcan1);
@@ -1100,6 +1139,8 @@ void Shooter_Control_Init(void)
     dial_disable_pending = 0;
 }
 
+
+//关闭发射
 void Shooter_Control_Disable(void)
 {
     shooter_controller.state = SHOOTER_OFF;
@@ -1109,7 +1150,8 @@ void Shooter_Control_Disable(void)
     shooter_controller.jam_process_step = 0;
 }
 
-void Shooter_On_Robot_Start(void)
+//发射使能
+void Shooter_Enable(void)
 {
     PID_Init(&dial_motor.pid_angle, dial_angle_kp, dial_angle_ki, dial_angle_kd, dial_angle_Integral_Limit, dial_angle_MaxOutput);
     PID_Init(&dial_motor.pid_speed, dial_speed_kp, dial_speed_ki, dial_speed_kd, dial_speed_Integral_Limit, dial_speed_MaxOutput);
@@ -1117,7 +1159,8 @@ void Shooter_On_Robot_Start(void)
     dial_enable_pending = 1;
 }
 
-void Shooter_On_Robot_Off(void)
+//发射失能
+void Shooter_Disable(void)
 {
     Shooter_Control_Disable();
     PID_Init(&dial_motor.pid_angle, dial_angle_kp, dial_angle_ki, dial_angle_kd, 0, 0);
@@ -1126,11 +1169,15 @@ void Shooter_On_Robot_Off(void)
     dial_disable_pending = 1;
 }
 
+
+//获取发射输出
 const Shooter_Output_t* Shooter_Get_Output(void)
 {
     return &output;
 }
 
+
+//获得裁判系统数据
 void Shooter_Set_Referee_Data(uint16_t heat, uint16_t limit, uint16_t cooling, float speed)
 {
     shooter_heat = heat;
@@ -1139,6 +1186,12 @@ void Shooter_Set_Referee_Data(uint16_t heat, uint16_t limit, uint16_t cooling, f
     initial_speed = speed;
 }
 
+
+
+
+// ===== CAN 反馈解码 =====
+
+//解码拨盘电机的CAN反馈帧
 static void Shooter_Update_Dial_Motor(const uint8_t* data)
 {
     dial_motor.id = (data[0]) & 0x0F;
@@ -1175,6 +1228,7 @@ static void Shooter_Update_Dial_Motor(const uint8_t* data)
     dial_motor.last_update_tick = osKernelGetTickCount();
 }
 
+//解码摩擦轮电机的CAN反馈帧
 static void Shooter_Update_Friction_Motors(const uint8_t* data, uint32_t can_id)
 {
     Motor_Controller* motor = NULL;
@@ -1196,22 +1250,36 @@ static void Shooter_Update_Friction_Motors(const uint8_t* data, uint32_t can_id)
     motor->last_update_tick = osKernelGetTickCount();
 }
 
-// 把外部输入与系统上下文翻译为本周期的射击决策(fric_cmd), 输出快照字段同步更新
+
+void Shooter_CAN_Feedback(uint32_t can_id, const uint8_t* data)
+{
+    if(can_id == RX_DIAL_FDB_ID)
+    {
+        Shooter_Update_Dial_Motor(data);
+    }
+    else if (can_id >= 0x201 && can_id <= 0x207)
+    {
+        Shooter_Update_Friction_Motors(data, can_id);
+    }
+}
+
+
+//更新外部输入
 static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
 {
     const RC_Data_t* rc = ctx->rc;
-
     fric_cmd.fire_command = 0;
     fric_cmd.fric_mode = SHOOTER_MODE_OFF;
 
-    //F/G 键边沿: 切换摩擦轮档位(仅比赛键鼠 VTM 使用)
-    if (rc->key.map.F && !f_key_last) fric_level = 1;
+	
+    //切换摩擦轮档位
+    if(rc->key.map.F && !f_key_last) fric_level = 1;
     f_key_last = rc->key.map.F;
 
-    if (rc->key.map.G && !g_key_last) fric_level = 2;
+    if(rc->key.map.G && !g_key_last) fric_level = 2;
     g_key_last = rc->key.map.G;
 
-    if (ctx->control_source == CONTROL_SOURCE_VTM)
+    if(ctx->control_source == CONTROL_SOURCE_VTM)
     {
         if (fric_level == 1) fric_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
         else if (fric_level == 2) fric_cmd.fric_mode = SHOOTER_MODE_HIGH_SPEED;
@@ -1224,7 +1292,6 @@ static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
             fric_cmd.fric_mode = SHOOTER_MODE_LOW_SPEED;
     }
 
-    //拨杆组合/档位状态决定摩擦轮是否使能
     uint8_t shooter_armed =
         (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_MID) ||
         (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_UP) ||
@@ -1233,23 +1300,24 @@ static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
         (rc->rc.s_left == DR16_SW_UP && rc->rc.s_right == DR16_SW_DOWN);
     if (!shooter_armed) fric_cmd.fric_mode = SHOOTER_MODE_OFF;
 
-    //开火输入(鼠标/滚轮/视觉瞄准中各条件为"或")
+		
+    //开火输入
     bool mouse_l_just_pressed = (rc->mouse.press_l && !mouse_l_last_state);
     mouse_l_last_state = rc->mouse.press_l;
 
     bool mouse_m_just_pressed = (rc->mouse.press_middle && !mouse_m_last_state);
     mouse_m_last_state = rc->mouse.press_middle;
 
-    if (rc->rc.wheel > 250 && ctx->robot_mode != ROBOT_MODE_AIMING)
+    if(rc->rc.wheel > 250 && ctx->robot_mode != ROBOT_MODE_AIMING)
     {
         fric_cmd.fire_command = 1;
     }
-    if (ctx->robot_mode == ROBOT_MODE_AIMING && Vision_IsOnline() && VisionData.is_tracking == 1 && VisionData.cmd_mode == 2)
+    if(ctx->robot_mode == ROBOT_MODE_AIMING && Vision_IsOnline() && VisionData.is_tracking == 1 && VisionData.cmd_mode == 2)
     {
         fric_cmd.fire_command = 1;
     }
-    if (mouse_m_just_pressed) fric_cmd.fire_command = 1;
-    if (ctx->is_aiming_now)
+    if(mouse_m_just_pressed) fric_cmd.fire_command = 1;
+    if(ctx->is_aiming_now)
     {
         if (rc->mouse.press_l && VisionData.cmd_mode == 2) fric_cmd.fire_command = 1;
     }
@@ -1258,12 +1326,9 @@ static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
         fric_cmd.fire_command = 1;
     }
 
-    //摩擦轮模式对外可见(供底盘状态上报)
     output.fric_mode = fric_cmd.fric_mode;
-
-    //底盘状态上报值: VTM 按低速判定, DR16 按高速判定(与原逻辑一致)
     output.friction_report = 0;
-    if (output.friction_ready)
+    if(output.friction_ready)
     {
         if (ctx->control_source == CONTROL_SOURCE_VTM)
         {
@@ -1276,17 +1341,10 @@ static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
     }
 }
 
-void Shooter_CAN_Feedback(uint32_t can_id, const uint8_t* data)
-{
-    if (can_id == RX_DIAL_FDB_ID)
-    {
-        Shooter_Update_Dial_Motor(data);
-    }
-    else if (can_id >= 0x201 && can_id <= 0x207)
-    {
-        Shooter_Update_Friction_Motors(data, can_id);
-    }
-}
+
+
+
+// ===== 电机在线检测 =====
 
 static void Shooter_Check_Motor_Online(Motor_Controller* motor, uint32_t current_tick)
 {
@@ -1303,14 +1361,17 @@ static void Shooter_Check_Motor_Online(Motor_Controller* motor, uint32_t current
 void Shooter_Check_Motors_Online(uint32_t current_tick)
 {
     Shooter_Check_Motor_Online(&dial_motor, current_tick);
-    //摩擦轮电机在线检测
-    for (uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
+
+    for(uint8_t i = 0; i < FRIC_MOTOR_NUM; i++)
     {
         Shooter_Check_Motor_Online(friction_motors[i].motor, current_tick);
     }
 }
 
 
+
+
+//获取调试打印信息
 const Shooter_Debug_Data_t* Shooter_Get_Debug_Data(void)
 {
     debug.referee_bullet_speed = initial_speed;
@@ -1324,7 +1385,6 @@ const Shooter_Debug_Data_t* Shooter_Get_Debug_Data(void)
     debug.friction_inner_right_speed = friction_motor_inner_right.feedback.actual_speed;
     debug.friction_inner_up_speed = friction_motor_inner_up.feedback.actual_speed;
 
-    //拨盘
     debug.dial_total_angle    = dial_motor.current_total_angle_rad;
     debug.dial_target_rad     = shooter_controller.dial_target_rad;
     debug.dial_angle_target   = dial_motor.pid_angle.target;
@@ -1334,11 +1394,12 @@ const Shooter_Debug_Data_t* Shooter_Get_Debug_Data(void)
     debug.dial_torque         = dial_motor.feedback.torque;
     debug.dial_velocity       = dial_motor.feedback.velocity;
 
-    //发射数与预测热量
     debug.shot_count   = (float)total_shot_count;
     debug.predict_heat = shooter_predict_heat;
     return &debug;
 }
+
+
 
 void Shooter_Tune_High_Speed(int32_t delta)
 {

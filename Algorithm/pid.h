@@ -1,6 +1,6 @@
 /**
  * @file pid.h
- * @brief 通用 PID 控制器(位置式 / 积分分离式 / 增量式)
+ * @brief 通用 PID 控制器
  */
 
 #ifndef PID_H
@@ -8,7 +8,7 @@
 
 
 /**
- * @brief PID 控制器
+ * @brief PID控制器
  */
 typedef struct
 {
@@ -35,23 +35,23 @@ typedef struct
 
 
 /**
- * @brief 初始化 PID 控制器
+ * @brief 初始化PID参数
  */
 void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float Integral_Limit, float MaxOutput);
 
 
 /**
- * @brief 位置式 PID 计算
+ * @brief 位置式PID计算
  */
 float PID_Calculate(PID_Controller *pid, float target, float measured);
 
 
-/** @brief 位置式 PID (带积分分离) */
+/** @brief 位置式PID(积分分离、微分先行) */
 float PID_Cal_Enhanced(PID_Controller *pid, float target, float measured);
 
 
 /**
- * @brief 增量式 PID 计算
+ * @brief 增量式PID计算
  */
 float PID_Cal_Increment(PID_Controller *pid, float target, float measured);
 

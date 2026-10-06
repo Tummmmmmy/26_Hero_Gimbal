@@ -2,7 +2,6 @@
  * @file servo.c
  * @brief 舵机 PWM 驱动
  *
- * 把目标角度换算成 PWM 脉宽, 驱动图传低头舵机与磁铁舵机。
  */
 
 #include "servo.h"
@@ -27,6 +26,7 @@ void Bsp_Servo_Init(void)
 }
 
 
+//设置舵机角度
 void Servo_Set_Angle(TIM_HandleTypeDef *htim, uint32_t Channel, float angle)
 {
     //角度安全限幅
@@ -42,6 +42,7 @@ void Servo_Set_Angle(TIM_HandleTypeDef *htim, uint32_t Channel, float angle)
 
     __HAL_TIM_SetCompare(htim, Channel, (uint32_t)pwm_val);
 }
+
 
 
 void VTM_Servo_Control_Loop(float gun_pitch_angle)

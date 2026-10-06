@@ -2,8 +2,6 @@
  * @file video_bridge.c
  * @brief 图传链路协议解析与转发
  *
- * 解析视觉小电脑经串口发来的视频包(校验/重组/按优先级入队),
- * 再以 0x0310 自定义帧转发给图传; 平台相关实现见 video_bridge_platform.c。
  */
 
 #include "video_bridge.h"

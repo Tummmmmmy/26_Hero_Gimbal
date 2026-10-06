@@ -2,7 +2,6 @@
  * @file bsp_DR16.c
  * @brief DR16 接收机驱动
  *
- * UART5 + DMA 接收 DBUS 帧, 解析遥控杆量/拨杆/按键并做在线超时判断。
  */
 
 #include "bsp_DR16.h"

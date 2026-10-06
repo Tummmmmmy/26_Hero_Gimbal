@@ -1,9 +1,6 @@
 /**
  * @file remote_control.c
  * @brief 遥控器输入统一模块
- *
- * 把 DR16 与 VT03 两路遥控数据统一成 RC_Data_t, 并维护当前控制源
- * (CONTROL_SOURCE_DR16 / CONTROL_SOURCE_VTM)。
  */
 
 #include "remote_control.h"
@@ -17,6 +14,7 @@ static RC_Data_t final_rc_data = {0};
 
 //当前遥控器控制源
 volatile ControlSource_e control_source = CONTROL_SOURCE_NONE;
+
 
 
 void RC_Update(void)

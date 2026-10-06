@@ -39,8 +39,10 @@ typedef struct {
 
 } SMC_Handle_t;
 
+
 /** @brief 初始化滑模控制器参数(内部清零状态) */
 void SMC_Init(SMC_Handle_t *pSMC, float C, float K, float Epsilon, float Beta, float Boundary, float OutMax, float LpTau, float Ts);
+
 
 /** @brief 执行一次滑模控制计算, 返回控制量 */
 float SMC_Calc(SMC_Handle_t *pSMC);

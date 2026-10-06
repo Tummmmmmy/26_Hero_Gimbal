@@ -101,7 +101,7 @@ vision_link          ──VisionData─┤
 ## 5. 废弃代码
 
 - `Modules/Vision_can.c/.h`：早期 CAN 视觉实现，已被 `vision_link`（USB CDC）取代，未加入 Keil 工程编译，文件保留备查。
-- `Bullet_Speed_Adaptive_Control()`：仍在 `shooter_control.c` 内部正常调用，保留。
+- `Bullet_Speed_Adaptive_Control()`：早期弹速自适应实现，实测效果不明显，已停用（调用点已注释，`MAX_AUTO_OFFSET` 为 0），代码保留备查。
 
 ## 6. 调用链总览
 

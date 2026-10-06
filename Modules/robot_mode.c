@@ -1,8 +1,6 @@
 /**
  * @file robot_mode.c
- * @brief 机器人工作模式选择模块
- *
- * 根据遥控来源(DR16/VTM)与底盘上坎状态决定当前工作模式,
+ * @brief 机器人模式选择模块
  */
 
 #include "robot_mode.h"
@@ -10,15 +8,15 @@
 #include "bsp_DR16.h"
 #include "chassis_control.h"
 
-// 当前工作模式
+//当前模式
 static Robot_Mode_e mode = ROBOT_MODE_OFF;
 
-// 模式对应的LED指示(无控制源时保持上一次)
+//LED指示
 static LED_State_e mode_led = LED_STATE_BOOTING;
 
 void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
 {
-    //VT03 拨杆选择
+    //VT03
     if (control_source == CONTROL_SOURCE_VTM)
     {
         switch (rc->rc.s_left)
@@ -40,11 +38,10 @@ void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
                 break;
         }
     }
-    //DR16 拨杆组合
+    //DR16
     else if (control_source == CONTROL_SOURCE_DR16)
     {
-        //上坎状态优先: 上坎待命/执行中固定为爬坡模式(不改变LED)
-        if (Chassis_Get_Climb_Mode() == CLIMB_MODE_STANDBY || Chassis_Get_Climb_Mode() == CLIMB_MODE_ACTIVE)
+        if(Chassis_Get_Climb_Mode() == CLIMB_MODE_STANDBY || Chassis_Get_Climb_Mode() == CLIMB_MODE_ACTIVE)
         {
             mode = ROBOT_MODE_CLIMB;
         }
@@ -94,20 +91,19 @@ void Robot_Mode_Update(const RC_Data_t* rc, ControlSource_e control_source)
             mode_led = LED_STATE_ENABLED;
         }
     }
-    //无控制源: 强制失能, LED保持
     else
     {
         mode = ROBOT_MODE_OFF;
     }
 }
 
-// 获取当前工作模式
+//获取当前模式
 Robot_Mode_e Robot_Mode_Get(void)
 {
     return mode;
 }
 
-// 获取模式对应的LED指示
+//获取LED指示
 LED_State_e Robot_Mode_Get_Led_State(void)
 {
     return mode_led;

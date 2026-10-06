@@ -2,7 +2,6 @@
  * @file can_transmit.c
  * @brief CAN 发送协议层
  *
- * 负责把控制量打包成具体电机/设备协议并发送。
  */
 
 #include "can_transmit.h"
@@ -27,12 +26,15 @@
 #define TX_DIAL_MODE_ID   0x301
 
 #define LIMIT_16BIT(val)  ((val) > 32767 ? 32767 : ((val) < -32768 ? -32768 : (val)))
-
-//仅本文件使用: 把 x 限制在 [min,max] 区间内(原定义在 main.h)
 #define LIMIT_MIN_MAX(x,min,max) (x) = (((x)<=(min))?(min):(((x)>=(max))?(max):(x)))
 
-// 浮点量线性映射为 bits 位无符号整数(越界按端点钳位)
-
+/**
+ * @brief  将浮点数转换为无符号整数
+ * @param  x     			要转换的浮点数
+ * @param  x_min      浮点数的最小值
+ * @param  x_max    	浮点数的最大值
+ * @param  bits      	无符号整数的位数
+ */
 int float_to_uint(float x, float x_min, float x_max, int bits) {
     float span = x_max - x_min;
     if (span < 1e-6f) return 0;
@@ -41,6 +43,8 @@ int float_to_uint(float x, float x_min, float x_max, int bits) {
 }
 
 
+
+//大疆电机控制指令发送
 void DJI_Motor_Send_Command(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, int16_t current1, int16_t current2, int16_t current3, int16_t current4)
 {
     uint8_t tx_data[8];
@@ -55,26 +59,21 @@ void DJI_Motor_Send_Command(FDCAN_HandleTypeDef* hfdcan, uint32_t std_id, int16_
     tx_data[6] = (uint8_t)(current4 >> 8);
     tx_data[7] = (uint8_t)(current4 & 0xFF);
 
-    //直接写入硬件 FIFO (检查是否有空位)
     BSP_CAN_Send(hfdcan, std_id, tx_data, FDCAN_DLC_BYTES_8);
 }
 
 
-// 备用：暂未调用
-//发送LK电机开启命令
 void LK_Motor_Enable(FDCAN_HandleTypeDef* hfdcan)
 {
     uint8_t tx_data[8] = {0};
 
     tx_data[0] = 0x88;//电机运行
-    //其他字节全是0x00
 
-
-    //发送
     BSP_CAN_Send(hfdcan, LK_YAW_ID, tx_data, FDCAN_DLC_BYTES_8);
 }
 
 
+//瓴控电机转矩控制发送
 void LK_Send_Torque(FDCAN_HandleTypeDef* hfdcan, float current_amps)
 {
     uint8_t tx_data[8];
@@ -96,12 +95,10 @@ void LK_Send_Torque(FDCAN_HandleTypeDef* hfdcan, float current_amps)
     tx_data[6] = 0x00;
     tx_data[7] = 0x00;
 
-    //直接写入硬件 FIFO (检查是否有空位)
-    BSP_CAN_Send(hfdcan, LK_YAW_ID, tx_data, FDCAN_DLC_BYTES_8); //数据长度 8字节
+    BSP_CAN_Send(hfdcan, LK_YAW_ID, tx_data, FDCAN_DLC_BYTES_8);
 }
 
 
-// 备用：暂未调用
 void LK_Send_Query(FDCAN_HandleTypeDef* hfdcan)
 {
     uint8_t tx_data[8];
@@ -116,12 +113,12 @@ void LK_Send_Query(FDCAN_HandleTypeDef* hfdcan)
     tx_data[6] = 0x00;
     tx_data[7] = 0x00;
 
-    //直接写入硬件 FIFO (检查是否有空位)
-    BSP_CAN_Send(hfdcan, LK_YAW_ID, tx_data, FDCAN_DLC_BYTES_8); //数据长度 8字节
+    BSP_CAN_Send(hfdcan, LK_YAW_ID, tx_data, FDCAN_DLC_BYTES_8);
 }
 
 
-// 备用：暂未调用
+
+//达妙MIT控制
 void DM_Motor_Send_MIT_Command(FDCAN_HandleTypeDef *hfdcan, uint16_t motor_id, float pos_rad, float vel_rad_s, float kp, float kd, float torque_nm, float t_max)
 {
     uint8_t tx_data[8];
@@ -141,13 +138,11 @@ void DM_Motor_Send_MIT_Command(FDCAN_HandleTypeDef *hfdcan, uint16_t motor_id, f
     tx_data[6] = ((kd_uint & 0x0F) << 4) | (tor_uint >> 8);
     tx_data[7] = tor_uint & 0xFF;
 
-
-    //直接写入硬件 FIFO (检查是否有空位)
     BSP_CAN_Send(hfdcan, motor_id, tx_data, FDCAN_DLC_BYTES_8);
 }
 
 
-//将达妙速度控制指令发送给底盘
+//达妙速度控制指令发送给底盘
 void Dial_Send_Speed(FDCAN_HandleTypeDef *hfdcan, float target_vel)
 {
     uint8_t tx_data[4];
@@ -158,11 +153,11 @@ void Dial_Send_Speed(FDCAN_HandleTypeDef *hfdcan, float target_vel)
     tx_data[2] = p_vel[2];
     tx_data[3] = p_vel[3];
 
-
     BSP_CAN_Send(hfdcan, TX_DIAL_CMD_ID, tx_data, FDCAN_DLC_BYTES_4);
 }
 
 
+//拨盘模式指令发送给底盘
 void Dial_Send_Mode_Command(FDCAN_HandleTypeDef *hfdcan, uint8_t command)
 {
     uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, command};
@@ -197,7 +192,7 @@ typedef union
     } pack;
 } Gimbal_To_Chassis_Msg_t;
 
-
+//底盘控制指令发送
 void Send_Chassis_Command(FDCAN_HandleTypeDef* hfdcan, int16_t vx, int16_t vy, int16_t wz, uint8_t mode, uint8_t supercap_req, uint8_t climb_cmd, uint8_t led_cmd , uint8_t key_shift ,uint8_t friction_state, uint8_t is_base_locked, uint8_t battle_mode)
 {
     Gimbal_To_Chassis_Msg_t tx_msg = {0};
@@ -216,8 +211,7 @@ void Send_Chassis_Command(FDCAN_HandleTypeDef* hfdcan, int16_t vx, int16_t vy, i
 		tx_msg.pack.is_base_locked = is_base_locked & 0x01;
 		tx_msg.pack.battle_mode    = battle_mode & 0x03;
 
-    //直接写入硬件发送 FIFO(检查是否有空位)
-    BSP_CAN_Send(hfdcan, TX_CHASSIS_COMMAND_ID, tx_msg.data, FDCAN_DLC_BYTES_8);     //长度8字节
+    BSP_CAN_Send(hfdcan, TX_CHASSIS_COMMAND_ID, tx_msg.data, FDCAN_DLC_BYTES_8);
 }
 
 
@@ -229,7 +223,7 @@ typedef union
     {
         uint64_t yaw_angle_x100   : 16; //Yawn轴机械角度
         int64_t  pitch_angle_x100 : 16; //Pitch俯仰机械角度
-
+			
 			  uint64_t friction_speed   : 13; //摩擦轮目标转速
 
         uint64_t reserved        : 19; //剩19位
@@ -253,6 +247,5 @@ void Send_Chassis_UI_Data(FDCAN_HandleTypeDef* hfdcan, float yaw_deg, float pitc
 
 		ui_msg.pack.friction_speed = (friction_speed > 8191) ? 8191 : friction_speed;
 
-    //直接写入硬件发送 FIFO(检查是否有空位)
-    BSP_CAN_Send(hfdcan, TX_CHASSIS_UI_ID, ui_msg.data, FDCAN_DLC_BYTES_8);     //长度8字节
+    BSP_CAN_Send(hfdcan, TX_CHASSIS_UI_ID, ui_msg.data, FDCAN_DLC_BYTES_8);
 }

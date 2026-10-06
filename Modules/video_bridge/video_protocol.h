@@ -2,7 +2,6 @@
  * @file video_protocol.h
  * @brief 图传链路二进制报文格式定义
  *
- * 与视觉小电脑约定的包结构(帧头/类型/编解码/分片), 收发两侧共用。
  */
 
 #ifndef VIDEO_PROTOCOL_H
