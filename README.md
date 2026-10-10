@@ -1,73 +1,347 @@
-# 26_Hero_Gimbal 英雄机器人 · 云台板电控
+# 26_Hero_Gimbal — RoboMaster 英雄机器人云台板电控
 
-## 简介
-- 项目：RoboMaster 英雄机器人云台板（电控）
-- MCU：STM32H723VGTx
-- 系统：FreeRTOS（CMSIS-RTOS v2）+ STM32Cube HAL
-- 通信：FDCAN1 / FDCAN2 / FDCAN3
-- 遥控：DR16（主用）、VT03（备用）
-- 状态：比赛验证版（已完成实车验证）
+RoboMaster 英雄机器人云台主控板的嵌入式控制程序。
 
-## 主要功能
-- 云台控制：Yaw（LK 电机力矩控制）、Pitch（DJI 电机）；支持 IMU 闭环（SMC）与编码器闭环（PID）两套模式
-- 瞄准：手操、自瞄、吊射、基地打击，与视觉（vision_link）协同
-- 射击：拨盘（DM 电机）+ 摩擦轮（DJI 电机），含卡弹检测/回弹、弹速统计
-- 底盘指令转发：速度、模式、超级电容、爬坡、LED、基地锁定
-- 安全：IMU 未就绪强制停机、遥控断连自动失能、长按/按键复位
+固件运行在 **STM32H723** 上，基于 **FreeRTOS** 实时调度，负责云台双轴、射击机构、遥控输入、视觉通信以及与底盘主控板之间的协同控制。
 
-## 目录结构
-- `Core/`：HAL 外设初始化、`main.c`、FreeRTOS 配置
-- `Algorithm/`：PID（全项目统一一套）、SMC、Ramp、Mahony、EKF、Kalman、滤波等算法
-- `BSP/`：DR16、VT03、ANO 协议、DWT、蜂鸣器等板级驱动
-- `Devices/`：BMI088 IMU、WS2812、舵机(servo) 等器件驱动
-- `Task/`：控制(control_task)、CAN接收(can_task)、打印(print_task)、IMU、device、vision、video、monitor 等 FreeRTOS 任务
-- `Modules/`：机器人调度(robot_control)、模式(robot_mode)、云台(gimbal_control)、底盘(chassis_control)、射击(shooter_control)、CAN收发(can_transmit/can_receive)、视觉(vision_link)、图传链路(video_bridge) 等模块
-- `docs/`：架构说明（`docs/architecture.md`）
-- `Drivers/ Middlewares/`：ST HAL、CMSIS、FreeRTOS、USB 库
+项目来源于 RoboMaster 赛季实车开发，并经过实际上车调试和比赛验证。
 
-## 编译与烧录
-1. 用 Keil MDK 打开 `MDK-ARM/h723_cloud.uvprojx`
-2. 编译（应 0 Error）
-3. 通过 J-Link / DAP 烧录到云台板
+---
 
-## 编码约定
-- 现有 `.c/.h` 源文件为 **GBK** 编码，请勿用会批量转换编码的工具处理
-- 例外：`Algorithm/` 下移植的算法文件（`LADRC.c`、`QuaternionEKF.c/.h`、`kalman_filter.c/.h`）与 `smc.c/.h`、`BSP/bsp_buzzer.c` 为 UTF-8，保持移植原样
-- `README.md` 与 `docs/` 下的文档为 UTF-8
+## 1. 项目概况
 
-## 控制模式（Robot_Mode_e）
+### 硬件平台
+
+| 项目 | 规格 |
+|---|---|
+| MCU | STM32H723VGT6，Cortex-M7，480 MHz |
+| RTOS | FreeRTOS / CMSIS-RTOS v2 |
+| 云台 Yaw | LK 无刷电机，CAN 力矩控制 |
+| 云台 Pitch | DJI 无刷电机，CAN 电流控制 |
+| 拨盘 | 达妙 DM4340 |
+| 摩擦轮 | DJI 无刷电机 × 6 |
+| IMU | BMI088，SPI |
+| 遥控 | DR16 / VT03 |
+| 视觉通信 | USB CDC |
+| 电机通信 | FDCAN |
+
+### 软件环境
+
+- STM32Cube HAL
+- FreeRTOS / CMSIS-RTOS v2
+- Keil MDK / ARM Compiler 6
+- C 语言
+- arm_math
+
+---
+
+## 2. 主要功能
+
+### 云台控制
+
+- Yaw / Pitch 双轴控制
+- IMU 闭环控制
+- 编码器闭环串级 PID
+- SMC 滑模控制
+- 云台跟随、瞄准等不同控制模式
+- 电机掉线与重连处理
+- Pitch 角度限制
+
+### 瞄准与视觉
+
+- 手动遥控瞄准
+- 视觉自瞄
+- 视觉目标角度接收
+- IMU 姿态数据发送至视觉端
+- USB CDC 通信及数据校验
+
+### 射击系统
+
+- DM4340 拨盘控制
+- 6 个摩擦轮速度控制
+- 位置 / 速度控制
+- 高低速射击模式
+- 拨盘自动校位
+- 卡弹检测与退弹
+- 裁判系统热量数据处理
+
+### 底盘协同
+
+云台板不直接控制底盘电机，而是根据当前模式和操作输入生成底盘控制指令，通过 CAN 发送给底盘主控板。
+
+包括：
+
+- 底盘速度指令
+- 云台跟随
+- 爬坡模式
+- 战斗模式
+- 超级电容及相关状态
+- 底盘反馈数据解析
+
+---
+
+## 3. 系统结构
+
+整个程序采用基于 FreeRTOS 的任务调度，应用逻辑主要集中在 `Modules/` 中。
+
+```text
+                    ┌──────────────────┐
+                    │   DR16 / VT03    │
+                    └────────┬─────────┘
+                             │
+                             ▼
+┌──────────────┐      ┌──────────────────┐      ┌──────────────┐
+│ BMI088 / IMU │─────▶│ Robot_Control    │◀─────│ Vision / USB │
+└──────────────┘      │   1 ms Control   │      └──────────────┘
+                      └────────┬─────────┘
+                               │
+                ┌──────────────┼──────────────┐
+                ▼              ▼              ▼
+        ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+        │Gimbal Control│ │Chassis Control│ │Shooter Control│
+        │   SMC / PID  │ │ CAN Command  │ │ PID / State  │
+        └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+               │                │                │
+               └────────────────┼────────────────┘
+                                ▼
+                         ┌──────────────┐
+                         │    FDCAN     │
+                         └──────┬───────┘
+                                │
+                ┌───────────────┼───────────────┐
+                ▼               ▼               ▼
+             Yaw / Pitch     Shooter        Chassis Board
+```
+
+---
+
+## 4. 核心控制链路
+
+系统的主要控制循环以约 **1 ms** 为周期运行。
+
+```text
+遥控输入 ─────┐
+              │
+IMU 数据 ─────┼──▶ Robot_Control_Loop()
+              │          │
+视觉数据 ─────┘          ▼
+                    模式判断
+                        │
+              ┌─────────┼─────────┐
+              ▼         ▼         ▼
+           云台控制   射击控制   底盘指令
+              │         │         │
+           SMC/PID   PID/状态机   CAN
+              │         │         │
+              └─────────┼─────────┘
+                        ▼
+                       CAN
+                        │
+                        ▼
+                      电机
+```
+
+CAN 接收方向则由中断将收到的帧放入消息队列，再由任务完成解析和分发：
+
+```text
+FDCAN RX
+   ↓
+HAL Callback
+   ↓
+Message Queue
+   ↓
+CAN Decode Task
+   ↓
+CAN Receive Router
+   ↓
+各模块更新电机反馈 / 底盘反馈 / 裁判数据
+```
+
+这种方式将 CAN 中断中的工作控制在较小范围内，具体协议解析放到任务中处理。
+
+---
+
+## 5. 控制模式
+
+程序根据遥控器输入和机器人状态切换不同工作模式。
+
 | 模式 | 说明 |
 |---|---|
-| OFF | 失能（默认） |
-| GIMBAL_ONLY | 仅云台 |
-| CHASSIS_ONLY | 仅底盘 |
-| FOLLOW | 底盘跟随云台 |
-| SHOOT / SHOOT_LOW | 射击（编码器闭环，低速/高速摩擦轮） |
-| AIMING / M_AIMING | 自瞄 / 手动自瞄 |
-| CLIMB | 爬坡 |
-| BATTLE | 综合战斗（键鼠操作） |
+| `OFF` | 电机失能 |
+| `GIMBAL_ONLY` | 仅控制云台 |
+| `CHASSIS_ONLY` | 仅底盘控制 |
+| `FOLLOW` | 云台与底盘跟随 |
+| `SHOOT / SHOOT_LOW` | 射击模式 |
+| `AIMING / M_AIMING` | 视觉 / 手动辅助瞄准 |
+| `CLIMB` | 爬坡模式 |
+| `BATTLE` | 综合战斗模式 |
 
-## CAN 分配（关键）
-| 总线 | 帧 ID | 方向 / 含义 |
-|---|---|---|
-| FDCAN1 | 0x141 | LK Yaw：TX 力矩指令 / RX 电机反馈 |
-| FDCAN1 | 0x300 | TX 云台 → 底盘控制指令（速度/模式/超电/上坎/LED/摩擦轮状态/基地锁定） |
-| FDCAN1 | 0x308 | TX 云台 → 底盘 UI 数据（50ms 周期：云台角度 + 摩擦轮转速） |
-| FDCAN1 | 0x301 | TX 拨盘模式指令（0xFC 使能 / 0xFD 失能） |
-| FDCAN1 | 0x303 | TX 拨盘速度指令（float，4 字节） |
-| FDCAN1 | 0x302 | RX 拨盘反馈（达妙电机） |
-| FDCAN1 | 0x304 | RX 底盘双板反馈（颜色 / 裁判系统数据转发） |
-| FDCAN2 | 0x200 | TX 摩擦轮外圈电流（电机 ID 1/2/3） |
-| FDCAN2 | 0x1FF | TX 摩擦轮内圈电流（电机 ID 5/6/7） |
-| FDCAN2 | 0x201 ~ 0x207 | RX 摩擦轮反馈（电机 ID 4 未使用） |
-| FDCAN3 | 0x1FF | TX Pitch 电流 |
-| FDCAN3 | 0x205 | RX Pitch 反馈 |
+实际模式由 `robot_mode` 统一管理，并根据 DR16 / VT03 输入进行映射。
 
-## 安全须知
-- 上电后默认 `OFF`，需要遥控切换到对应模式才使能
-- IMU 未就绪时控制循环会强制清零所有输出
-- 遥控断连超过阈值自动进入 `OFF`
-- 上电/测试时注意摩擦轮、拨盘等运动部件
+---
 
-## 废弃说明
-- `Modules/Vision_can.c/.h`：早期 CAN 视觉实现，已被 `vision_link`（USB CDC）取代，未加入 Keil 工程编译，文件保留备查
+## 6. 主要模块
+
+```text
+Core/
+    STM32 HAL 初始化、main.c、FreeRTOS 配置
+
+Algorithm/
+    PID、SMC、姿态解算、滤波、Ramp 等算法
+
+BSP/
+    FDCAN、DR16、VT03、DWT、调试协议等底层接口
+
+Devices/
+    BMI088、Motor、WS2812、Servo 等设备驱动
+
+Task/
+    IMU、控制、CAN、视觉、图传、监控等 FreeRTOS 任务
+
+Modules/
+    robot_control
+    robot_mode
+    gimbal_control
+    chassis_control
+    shooter_control
+    can_receive
+    can_transmit
+    vision_link
+    video_bridge
+
+Drivers/
+Middlewares/
+    STM32 HAL、CMSIS、FreeRTOS 等第三方/底层组件
+```
+
+---
+
+## 7. 云台控制
+
+云台 Yaw 和 Pitch 根据不同比赛模式使用不同的控制方式。
+
+### IMU 模式
+
+使用 IMU 姿态作为反馈，采用 SMC 进行控制。
+
+```text
+目标角度
+   ↓
+角度误差
+   ↓
+SMC
+   ↓
+电机控制量
+   ↓
+CAN
+   ↓
+云台电机
+   ↑
+ IMU / 角速度反馈
+```
+
+视觉瞄准、基地打击等模式下会根据实际需求调整控制参数。
+
+### 编码器模式
+
+采用位置环 + 速度环串级 PID：
+
+```text
+目标角度
+   ↓
+位置 PID
+   ↓
+目标速度
+   ↓
+速度 PID
+   ↓
+电机控制量
+   ↓
+CAN
+```
+
+两种控制方式根据实际模式切换，用于兼顾不同比赛场景下的响应速度、稳定性和控制方式。
+
+---
+
+## 8. 射击控制
+
+射击系统由拨盘和摩擦轮组成。
+
+```text
+                 Shooter Control
+                       │
+            ┌──────────┴──────────┐
+            ▼                     ▼
+       DM4340 拨盘             摩擦轮 × 6
+       位置 / 速度控制          速度 PID
+            │                     │
+            └──────────┬──────────┘
+                       ▼
+                    射击执行
+```
+
+拨盘内部包含校位、准备、射击和卡弹处理等状态。
+
+摩擦轮根据射击模式切换目标转速，并通过反馈速度进行闭环控制。
+
+---
+
+## 9. 安全机制
+
+系统在实际机器人运行中包含多级安全保护：
+
+- 上电默认处于 `OFF` 状态
+- IMU 未完成初始化时禁止电机输出
+- 遥控器失联后自动进入失能状态
+- 电机反馈超时后标记为离线
+- Pitch 设置软限位
+- 射击系统包含卡弹检测和退弹逻辑
+- 复位过程中禁止执行器输出
+
+这些机制主要用于降低上电、通信异常和运行过程中出现失控的风险。
+
+---
+
+## 10. 个人工作
+
+本人在 RoboMaster 英雄机器人项目中主要负责**电控方向的开发与实车调试**，包括云台、底盘协同以及射击相关控制。
+
+实际工作以：
+
+- STM32 / FreeRTOS 固件开发
+- CAN 电机通信
+- 云台控制与参数调试
+- 电机控制
+- 机器人模式与模块联调
+- 实车问题排查与参数调整
+
+为主。
+
+后续对赛季代码进行了整理和重构，使模块职责、状态管理和接口更加清晰，并保留原有实车验证过的控制逻辑。
+
+> 注：具体模块归属以本人实际负责的赛季代码和提交记录为准。
+
+---
+
+## 11. 构建与烧录
+
+使用 Keil MDK 打开：
+
+```text
+MDK-ARM/h723_cloud.uvprojx
+```
+
+编译后通过 J-Link / DAP-Link 等调试器烧录至云台主控板。
+
+源码部分使用了不同历史来源的编码格式，修改已有源码时需要注意保持文件原有编码，避免批量转换导致中文注释乱码。
+
+---
+
+## 12. 工程状态
+
+该工程来自 RoboMaster 赛季实际使用的英雄机器人云台板固件，已经完成实车调试，并在比赛中得到实际验证。
+
+部分历史代码、实验性功能和已经停用的方案仍保留在工程中，用于记录赛季开发过程。
+
+该仓库主要用于展示机器人嵌入式控制、CAN 通信、实时任务、运动控制以及实车调试相关经验。

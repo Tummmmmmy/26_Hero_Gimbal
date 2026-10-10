@@ -1152,6 +1152,11 @@
               <FileType>1</FileType>
               <FilePath>..\Modules\vision_link.c</FilePath>
             </File>
+            <File>
+              <FileName>Vision_can.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\Vision_can.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -1,6 +1,6 @@
 /**
  * @file vision_link.c
- * @brief 视觉通信模块(USB CDC 虚拟串口)
+ * @brief 视觉通信模块
  *
  */
 
@@ -18,17 +18,17 @@ extern USBD_HandleTypeDef hUsbDeviceHS;
 extern PCD_HandleTypeDef hpcd_USB_OTG_HS;
 
 
-// 全局变量定义
 Vision_Data_t VisionData;
-static Vision_Send_t VisionTxData; //发送缓冲，设为static，内部使用
+
+static Vision_Send_t VisionTxData;
 
 
-// 异步重连状态机
+//异步重连状态机
 static uint8_t usb_reconnect_state = 0;       
 static uint32_t usb_reconnect_timer = 0; 
 
 
-//外部IMU全局变量
+//外部IMU
 extern float pitch, yaw, total_yaw;
 extern float gyro[3]; // gyro[0]=pitch_rate, gyro[2]=yaw_rate (rad/s)
 //extern float quat[4]; 
@@ -134,7 +134,7 @@ void Vision_Process_Data(uint8_t *buf, uint32_t len)
 void Vision_Send_Data(void)
 {
     //填充IMU数据
-    VisionTxData.mode = 1; //回传一个模式，可以自定义
+    VisionTxData.mode = 1;
 
     // 四元数
     VisionTxData.q[0] = q0; // w
@@ -175,6 +175,7 @@ void Vision_Send_Data(void)
         CDC_Transmit_HS((uint8_t*)&VisionTxData, sizeof(Vision_Send_t));
     }
 }
+
 
 
 //异步非阻塞 USB 重启状态机

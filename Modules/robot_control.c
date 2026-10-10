@@ -27,8 +27,6 @@ static const float DEG_TO_ENCODER = 8192.0f / 360.0f;
 
 
 
-// ===== 控制参数 =====
-
 //云台遥控控制参数
 //IMU闭环
 static float k_yaw_imu = 0.2f;
@@ -73,7 +71,7 @@ static const RC_Data_t* rc;
 
 
 
-// ===== 对外接口 =====
+
 
 //初始化所有控制模块
 void Robot_Param_Init(void)
@@ -97,7 +95,6 @@ LED_State_e Robot_Get_Led_State(void)
 
 
 
-// ===== 内部辅助函数 =====
 
 //重置IMU并对齐云台
 static void Robot_Reset_IMU(void)

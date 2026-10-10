@@ -49,7 +49,7 @@ static Gimbal_Debug_Data_t debug;
 
 
 
-// ===== 控制参数 =====
+//控制参数
 
 //Yaw 
 
@@ -128,7 +128,7 @@ static float gimbal_pitch_beta_radar = 40.0f;
 
 
 
-// ===== 私有辅助函数 =====
+
 
 //初始化电机
 static void Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_HandleTypeDef* hfdcan)
@@ -189,7 +189,7 @@ float Gimbal_Get_Yaw_Encoder_Diff(void)
 
 
 
-// ===== 对外 API 实现 =====
+
 
 //初始化云台
 void Gimbal_Control_Init(void)
@@ -417,7 +417,9 @@ void Gimbal_World_Target_To_IMU(const IMU_Data_t* imu)
 
 
 
-// ===== 目标角度接口 =====
+
+//目标角度接口
+
 
 void Gimbal_Set_World_Target(float yaw, float pitch)
 {
@@ -601,7 +603,9 @@ const Gimbal_Debug_Data_t* Gimbal_Get_Debug_Data(void)
 }
 
 
-// ===== CAN 反馈解码 =====
+
+
+
 
 //解码Yaw电机的CAN反馈帧(LK)
 void Gimbal_Update_Yaw(const uint8_t* data)
@@ -643,8 +647,11 @@ void Gimbal_Update_Pitch(const uint8_t* data)
 }
 
 
-// ===== 电机在线检测 =====
 
+
+
+
+//电机在线检测
 static void Gimbal_Check_Motor_Online(Motor_Controller* motor, uint32_t current_tick)
 {
     if(current_tick - motor->last_update_tick > 200)

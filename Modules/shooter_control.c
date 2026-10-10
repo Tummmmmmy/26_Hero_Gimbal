@@ -1093,7 +1093,6 @@ static uint8_t Shooter_Check_Heat_Allowed(void)
 
 
 
-// ===== 对外 API =====
 
 static void Shooter_Motor_Init(Motor_Controller* motor, uint16_t id, FDCAN_HandleTypeDef* hfdcan)
 {
@@ -1189,7 +1188,8 @@ void Shooter_Set_Referee_Data(uint16_t heat, uint16_t limit, uint16_t cooling, f
 
 
 
-// ===== CAN 反馈解码 =====
+
+
 
 //解码拨盘电机的CAN反馈帧
 static void Shooter_Update_Dial_Motor(const uint8_t* data)
@@ -1344,8 +1344,8 @@ static void Shooter_Update_Cmd_From_Input(const Shooter_Context_t* ctx)
 
 
 
-// ===== 电机在线检测 =====
 
+//电机在线检测
 static void Shooter_Check_Motor_Online(Motor_Controller* motor, uint32_t current_tick)
 {
     if (current_tick - motor->last_update_tick > 200)

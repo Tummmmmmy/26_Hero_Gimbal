@@ -1,8 +1,7 @@
 /**
  * @file Vision_can.h
- * @brief [废弃] 早期 CAN 视觉通信协议定义
+ * @brief CAN 视觉通信协议定义
  *
- * 已被 vision_link(USB CDC) 取代, 未加入 Keil 工程编译, 仅保留备查。
  */
 
 #ifndef VISION_CAN_H
@@ -17,7 +16,7 @@
 #define VISION_TX_S_CAN_ID 0x110//0x110
 
 
-/** @brief 视觉接收数据(旧CAN协议) */
+/** @brief 视觉接收数据 */
 typedef struct
 {
     uint8_t is_controlling; //是否控制

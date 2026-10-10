@@ -1,8 +1,7 @@
 /**
  * @file Vision_can.c
- * @brief [废弃] 早期 CAN 视觉通信实现
+ * @brief CAN 视觉通信实现
  *
- * 已被 vision_link(USB CDC) 取代, 未加入 Keil 工程编译, 仅保留备查。
  */
 
 #include "vision_can.h"
@@ -58,7 +57,7 @@ void Vision_Send_IMU(FDCAN_HandleTypeDef *hfdcan)
     tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     tx_header.MessageMarker = 0;
 
-    //根据你的协议注释 (x, y, z, w)，正确打包
+    //根据协议注释 (x, y, z, w)
     int16_t x = (int16_t)(q1 * 10000.0f); // q1 is x
     int16_t y = (int16_t)(q2 * 10000.0f); // q2 is y
     int16_t z = (int16_t)(q3 * 10000.0f); // q3 is z
@@ -77,7 +76,7 @@ void Vision_Send_IMU(FDCAN_HandleTypeDef *hfdcan)
 
 
 /**
- * @brief  通过CAN发送状态信息 (直接发送版)
+ * @brief  通过CAN发送状态信息
  */
 void Vision_Send_Status(FDCAN_HandleTypeDef *hfdcan, float bullet_speed, uint8_t mode, uint8_t shoot_mode)
 {
