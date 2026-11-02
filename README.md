@@ -16,14 +16,17 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序。
 |---|---|
 | MCU | STM32H723VGT6，Cortex-M7，480 MHz |
 | RTOS | FreeRTOS / CMSIS-RTOS v2 |
-| 云台 Yaw | LK 无刷电机，CAN 力矩控制 |
-| 云台 Pitch | DJI 无刷电机，CAN 电流控制 |
-| 拨盘 | 达妙 DM4340 |
-| 摩擦轮 | DJI 无刷电机 × 6 |
+| 云台 Yaw | 瓴控 MF9025 无刷电机，CAN 力矩控制 |
+| 云台 Pitch | 大疆 GM6020 无刷电机，CAN 电流控制 |
+| 拨盘 | 达妙 DM-J4340-2EC 关节电机 |
+| 摩擦轮 | 大疆 M3508 减速电机 × 6 |
+| 图传视角舵机 | RDS3115 双轴舵机，TIM2_CH3 PWM |
 | IMU | BMI088，SPI |
 | 遥控 | DR16 / VT03 |
 | 视觉通信 | USB CDC |
 | 电机通信 | FDCAN |
+
+器件型号、CAN 接口和通信链路见 [硬件连接与通信拓扑](docs/hardware-topology.png)。
 
 ### 软件环境
 
@@ -111,6 +114,8 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序。
                 ▼               ▼               ▼
              Yaw / Pitch     Shooter        Chassis Board
 ```
+
+更完整的软件分层、任务模型和模块职责见 [架构说明](docs/architecture.md)。
 
 ---
 

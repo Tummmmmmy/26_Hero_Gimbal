@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1240" viewBox="0 0 1800 1240">
+<style>
+  .t{font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;fill:#111827;}
+  .title{font-size:30px;font-weight:700;}
+  .sub{font-size:13.5px;fill:#6b7280;}
+  .devt{font-size:16px;font-weight:600;}
+  .devs{font-size:12.5px;fill:#6b7280;}
+  .lbl{font-size:12px;fill:#2563eb;paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round;}
+  .albl{font-size:11.5px;fill:#d97706;paint-order:stroke;stroke:#ffffff;stroke-width:4px;stroke-linejoin:round;}
+  .canlbl{font-size:14px;font-weight:700;fill:#059669;}
+  .note{font-size:12.5px;fill:#4b5563;}
+  .box{fill:#f9fafb;stroke:#9ca3af;stroke-width:1.5;}
+  .cbox{fill:#ffffff;stroke:#059669;stroke-width:1.5;}
+  .mcu{fill:#eef2ff;stroke:#4338ca;stroke-width:2;}
+  .wire{stroke:#2563eb;stroke-width:2;fill:none;}
+  .can{stroke:#059669;stroke-width:3;fill:none;}
+  .air{stroke:#d97706;stroke-width:2;fill:none;stroke-dasharray:6 5;}
+</style>
+<defs>
+  <marker id="ab" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L12,6 L0,12 Z" fill="#2563eb"/></marker>
+  <marker id="aa" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L12,6 L0,12 Z" fill="#d97706"/></marker>
+</defs>
+<rect x="0" y="0" width="1800" height="1240" fill="#ffffff"/>
+<text class="t title" x="60" y="62">26_Hero_Gimbal 系统连接与通信拓扑</text>
+<text class="t sub" x="60" y="92">STM32H723VGT6 · RoboMaster 英雄机器人云台板 · 通信关系示意（不含供电与连接器）</text>
+
+<!-- ===== MCU ===== -->
+<rect class="mcu" x="640" y="340" width="400" height="360" rx="14"/>
+<text class="t" x="660" y="378" font-size="22" font-weight="700">STM32H723VGT6</text>
+<text class="t" x="660" y="404" font-size="13" fill="#4b5563">Cortex-M7 480 MHz · FreeRTOS</text>
+<line x1="660" y1="424" x2="1020" y2="424" stroke="#c7d2fe" stroke-width="1.5"/>
+<text class="t" x="660" y="465" font-size="13.5" fill="#374151">云台 / 发射闭环 · 1 ms</text>
+<text class="t" x="660" y="497" font-size="13.5" fill="#374151">底盘指令下发 · 状态回传</text>
+<text class="t" x="660" y="529" font-size="13.5" fill="#374151">视觉目标接入 · 图传视频中继</text>
+<line x1="660" y1="558" x2="1020" y2="558" stroke="#c7d2fe" stroke-width="1.5"/>
+<text class="t" x="660" y="592" font-size="12.5" fill="#6b7280">FDCAN ×3 · UART ×4 · SPI · USB · PWM</text>
+
+<!-- ===== 图传视角舵机 ===== -->
+<rect class="box" x="1055" y="596" width="175" height="104" rx="10"/>
+<text class="t devt" x="1071" y="624">图传视角舵机</text>
+<text class="t devs" x="1071" y="646">RDS3115 双轴</text>
+<text class="t devs" x="1071" y="668">TIM2_CH3 · PWM</text>
+<text class="t devs" x="1071" y="690">E 键切换：低头 / 前视</text>
+<line class="wire" x1="1040" y1="645" x2="1055" y2="645" marker-end="url(#ab)"/>
+
+<!-- ===== 左侧：遥控 / IMU / 调试 ===== -->
+<rect class="box" x="60" y="110" width="200" height="70" rx="10"/>
+<text class="t devt" x="78" y="138">DR16 遥控器</text>
+<text class="t devs" x="78" y="162">2.4 GHz</text>
+<line class="air" x1="160" y1="180" x2="160" y2="220" marker-end="url(#aa)"/>
+<text class="t albl" x="175" y="207">2.4 GHz</text>
+
+<rect class="box" x="60" y="220" width="240" height="80" rx="10"/>
+<text class="t devt" x="78" y="250">DR16 接收机</text>
+<text class="t devs" x="78" y="276">SBUS / DBUS 接收</text>
+<path class="wire" d="M300 260 H380 V380 H640" marker-end="url(#ab)"/>
+<text class="t lbl" x="510" y="370" text-anchor="middle">UART5 · 100 kbps</text>
+
+<rect class="box" x="60" y="470" width="240" height="80" rx="10"/>
+<text class="t devt" x="78" y="500">BMI088 IMU</text>
+<text class="t devs" x="78" y="526">SPI2 · 姿态反馈</text>
+<line class="wire" x1="300" y1="510" x2="640" y2="510" marker-end="url(#ab)"/>
+<text class="t lbl" x="470" y="500" text-anchor="middle">SPI2</text>
+
+<rect class="box" x="60" y="620" width="240" height="80" rx="10"/>
+<text class="t devt" x="78" y="650">匿名上位机 / VOFA+</text>
+<text class="t devs" x="78" y="676">调试波形与日志</text>
+<line class="wire" x1="640" y1="660" x2="300" y2="660" marker-end="url(#ab)"/>
+<text class="t lbl" x="470" y="650" text-anchor="middle">UART10 · 115200</text>
+
+<!-- ===== 右侧：视觉 / 图传 ===== -->
+<rect class="box" x="1200" y="90" width="240" height="70" rx="10"/>
+<text class="t devt" x="1218" y="118">自瞄相机</text>
+<text class="t devs" x="1218" y="142">USB</text>
+
+<rect class="box" x="1480" y="90" width="240" height="70" rx="10"/>
+<text class="t devt" x="1498" y="118">长焦吊射相机</text>
+<text class="t devs" x="1498" y="142">USB</text>
+
+<rect class="box" x="1240" y="200" width="440" height="110" rx="10"/>
+<text class="t devt" x="1258" y="230">车载 MiniPC</text>
+<text class="t devs" x="1258" y="256">视觉自瞄 + 视频编码</text>
+<text class="t devs" x="1258" y="278">H.264 超低码率切片</text>
+
+<line class="wire" x1="1320" y1="160" x2="1320" y2="200" marker-end="url(#ab)"/>
+<text class="t albl" x="1335" y="185" fill="#2563eb">USB</text>
+<line class="wire" x1="1600" y1="160" x2="1600" y2="200" marker-end="url(#ab)"/>
+<text class="t albl" x="1615" y="185" fill="#2563eb">USB</text>
+
+<path class="wire" d="M1240 240 H1120 V380 H1040" marker-end="url(#ab)"/>
+<text class="t lbl" x="1050" y="372">USB CDC · 目标角 ⇄ IMU / 弹速</text>
+
+<rect class="box" x="1320" y="350" width="320" height="50" rx="10"/>
+<text class="t" x="1338" y="372" font-size="14.5" font-weight="600">CH9111 USB-to-TTL</text>
+<text class="t devs" x="1338" y="390">1.5 Mbps</text>
+<line class="wire" x1="1400" y1="310" x2="1400" y2="350" marker-end="url(#ab)"/>
+<text class="t albl" x="1415" y="335" fill="#2563eb">USB</text>
+
+<path class="wire" d="M1320 375 H1160 V450 H1040" marker-end="url(#ab)"/>
+<text class="t lbl" x="1050" y="442">UART7 · 1.5 Mbps（视频切片）</text>
+
+<rect class="box" x="1240" y="520" width="440" height="100" rx="10"/>
+<text class="t devt" x="1258" y="550">DJI 图传发送端（VTM）</text>
+<text class="t devs" x="1258" y="576">UART1 · 921600 · 全双工</text>
+
+<line class="wire" x1="1040" y1="555" x2="1240" y2="555" marker-end="url(#ab)"/>
+<text class="t lbl" x="1050" y="547">TX 0x0310 · 视频</text>
+<line class="wire" x1="1240" y1="580" x2="1040" y2="580" marker-end="url(#ab)"/>
+<text class="t lbl" x="1050" y="600">RX VT03 · 遥控</text>
+
+<rect class="box" x="1500" y="420" width="220" height="70" rx="10"/>
+<text class="t devt" x="1518" y="448">VT03 遥控器</text>
+<text class="t devs" x="1518" y="472">2.4 GHz 图传链路</text>
+<line class="air" x1="1610" y1="490" x2="1610" y2="520" marker-end="url(#aa)"/>
+<text class="t albl" x="1625" y="508">2.4 GHz</text>
+
+<rect class="box" x="1240" y="660" width="440" height="90" rx="10"/>
+<text class="t devt" x="1258" y="690">5.8 GHz 图传链路</text>
+<text class="t devs" x="1258" y="716">裁判系统 → 操作手 PC</text>
+<text class="t devs" x="1258" y="738">0x0310 CustomByteBlock（低带宽视频）</text>
+<line class="air" x1="1460" y1="620" x2="1460" y2="660" marker-end="url(#aa)"/>
+<text class="t albl" x="1475" y="645">5.8 GHz 无线</text>
+
+<!-- ===== CAN ===== -->
+<path class="can" d="M840 700 V780 H1500 V1100"/>
+<line class="can" x1="100" y1="860" x2="1500" y2="860"/>
+<line class="can" x1="100" y1="980" x2="1500" y2="980"/>
+<line class="can" x1="100" y1="1100" x2="1500" y2="1100"/>
+<circle cx="1500" cy="860" r="4" fill="#059669"/>
+<circle cx="1500" cy="980" r="4" fill="#059669"/>
+
+<text class="t canlbl" x="1050" y="850">FDCAN1</text>
+<text class="t canlbl" x="1050" y="970">FDCAN2</text>
+<text class="t canlbl" x="1050" y="1090">FDCAN3</text>
+
+<rect class="cbox" x="140" y="815" width="210" height="90" rx="8"/>
+<text class="t devt" x="158" y="843">云台 Yaw 电机</text>
+<text class="t devs" x="158" y="867">瓴控 MF9025</text>
+<text class="t devs" x="158" y="891">0x141 · 力矩控制</text>
+
+<rect class="cbox" x="390" y="815" width="240" height="90" rx="8"/>
+<text class="t devt" x="408" y="843">拨盘电机</text>
+<text class="t devs" x="408" y="867">达妙 DM-J4340-2EC</text>
+<text class="t devs" x="408" y="891">0x301/0x303 ↔ 0x302</text>
+
+<rect class="cbox" x="670" y="815" width="250" height="90" rx="8"/>
+<text class="t devt" x="688" y="843">底盘主控板</text>
+<text class="t devs" x="688" y="867">0x300/0x308 ↔ 0x304</text>
+<text class="t devs" x="688" y="891">速度 / 超电 / 裁判数据</text>
+
+<rect class="cbox" x="140" y="940" width="400" height="90" rx="8"/>
+<text class="t devt" x="158" y="968">摩擦轮 × 6</text>
+<text class="t devs" x="158" y="992">大疆 M3508</text>
+<text class="t devs" x="158" y="1016">0x1FF/0x200 ↔ 0x201–0x207</text>
+
+<rect class="cbox" x="140" y="1060" width="250" height="90" rx="8"/>
+<text class="t devt" x="158" y="1088">云台 Pitch 电机</text>
+<text class="t devs" x="158" y="1112">大疆 GM6020</text>
+<text class="t devs" x="158" y="1136">0x1FF ↔ 0x205</text>
+
+<!-- ===== 图例 ===== -->
+<line class="wire" x1="60" y1="1192" x2="110" y2="1192"/>
+<text class="t note" x="120" y="1196">UART / SPI / USB</text>
+<line class="can" x1="290" y1="1192" x2="340" y2="1192"/>
+<text class="t note" x="350" y="1196">FDCAN</text>
+<line class="air" x1="450" y1="1192" x2="500" y2="1192"/>
+<text class="t note" x="510" y="1196">无线 / 网络</text>
+<text class="t note" x="650" y="1196">箭头 = 数据方向 · UART1 全双工（TX 视频 / RX VT03）</text>
+</svg>
