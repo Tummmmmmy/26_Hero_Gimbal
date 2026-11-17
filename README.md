@@ -1,10 +1,58 @@
 # 26_Hero_Gimbal — RoboMaster 英雄机器人云台板电控
 
-RoboMaster 英雄机器人云台主控板的嵌入式控制程序。
+RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台双轴、双级六摩擦轮发射、视觉通信和板间协同。
 
-固件运行在 **STM32H723** 上，基于 **FreeRTOS** 实时调度，负责云台双轴、射击机构、遥控输入、视觉通信以及与底盘主控板之间的协同控制。
+> **项目角色：** 电控负责人，负责整车电控架构、云台板固件、控制闭环与实车联调。<br>
+> **本仓库范围：** 云台板固件；底盘板固件见 [26_Hero_Chassis](https://github.com/Tummmmmmy/26_Hero_Chassis)。
 
-项目来源于 RoboMaster 赛季实车开发，并经过实际上车调试和比赛验证。
+<p align="center">
+  <img src="docs/media/gimbal-closeup.jpg" alt="RoboMaster 英雄机器人云台与发射机构" width="360">
+</p>
+
+## 项目亮点
+
+- **比赛结果：** RoboMaster 2026 机甲大师超级对抗赛·全国赛 全国一等奖（十二强） | 英雄机器人全国一等奖。
+- **国赛统计：** 局均命中 6.5 发，局均关键伤害 1759，双项全国第一。
+- **专项实车测试：** 16.5 m/s 发弹初速下，弹速极差 < 0.08 m/s。
+- **实时控制：** 双 STM32H723 + FreeRTOS，1 ms 控制周期；本仓库负责云台、发射、视觉通信和板间协同。
+
+## 项目角色与贡献范围
+
+- 本人负责：整车电控架构、云台板固件、CAN 收发与协议、云台/发射控制、视觉与图传链路、参数整定和实车联调。
+- 团队协作：视觉识别算法、机械结构与整车硬件加工。
+- 仓库保留赛季迭代记录，当前主线代码位于 `Modules/` 与 `Task/`。
+
+## 第三方组件与原创范围
+
+- 仓库包含 STM32 HAL、CMSIS、FreeRTOS、arm_math 等第三方组件；应用层模块、任务组织、CAN 协议、控制逻辑、通信链路和实车调试为本项目工作。
+- 外部参考代码和电机/传感器协议实现按其原许可保留，不作为原创部分展示。
+
+## 实车与演示
+
+### 官方赛事高光
+
+<p align="center">
+  <a href="https://www.bilibili.com/video/BV18tuc6LEzY">
+    <img src="docs/media/match-highlight.gif" alt="RoboMaster 2026 官方赛事高光" width="760">
+  </a><br>
+  <sub>RoboMaster 官方赛事高光 · 点击观看完整视频（Bilibili）</sub>
+</p>
+
+### 技术演示
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/gimbal-aim.gif" width="420" alt="视觉自瞄"><br>视觉自瞄与云台跟踪</td>
+    <td align="center"><img src="docs/media/gimbal-lob.gif" width="260" alt="吊射控制"><br>吊射模式云台姿态</td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/media/competition.jpg" alt="RoboMaster 2026 全国赛现场" width="760"><br>
+  <sub>RoboMaster 2026 机甲大师超级对抗赛·全国赛现场</sub>
+</p>
+
+[完整演示视频（1280×720，23.9 s，5.1 MB）](docs/media/gimbal-demo.mp4)
 
 ---
 
@@ -165,7 +213,18 @@ CAN Receive Router
 
 ---
 
-## 5. 控制模式
+## 5. 通信、实时性与 H7 数据一致性
+
+云台板同时处理视觉、遥控、图传、CAN 和调试遥测，通信链路按“中断只做搬运、任务完成解析、控制环只取最新值”组织。
+
+- **视觉链路：** 通过 USB CDC 与视觉端交换目标角度和 IMU 姿态，应用层使用 CRC16 校验；控制环不直接等待 USB 发送完成。
+- **图传链路：** 图传长报文曾阻塞自瞄通信；在分析发送耗时后，将发送改为 UART DMA，并调整任务调度，避免大块数据占用控制任务。
+- **H7 D-Cache：** DMA 发送前对发送缓冲区执行 `SCB_CleanDCache_by_Addr`；DR16/VT03 接收回调先执行 `SCB_InvalidateDCache_by_Addr`，再解析数据；DMA 缓冲区按 32 字节对齐，避免 CPU 与 DMA 看到不同副本。
+- **非阻塞遥测：** 调试打印由独立任务消费消息队列，发送前 clean cache，DMA 完成中断释放信号量；控制任务不等待串口发送完成。DR16 使用“队列满时覆盖旧帧”的最新值策略，避免旧遥控数据造成处理延迟。
+
+---
+
+## 6. 控制模式
 
 程序根据遥控器输入和机器人状态切换不同工作模式。
 
@@ -184,7 +243,7 @@ CAN Receive Router
 
 ---
 
-## 6. 主要模块
+## 7. 主要模块
 
 ```text
 Core/
@@ -220,7 +279,7 @@ Middlewares/
 
 ---
 
-## 7. 云台控制
+## 8. 云台控制
 
 云台 Yaw 和 Pitch 根据不同比赛模式使用不同的控制方式。
 
@@ -268,7 +327,7 @@ CAN
 
 ---
 
-## 8. 射击控制
+## 9. 射击控制
 
 射击系统由拨盘和摩擦轮组成。
 
@@ -289,9 +348,14 @@ CAN
 
 摩擦轮根据射击模式切换目标转速，并通过反馈速度进行闭环控制。
 
+<p align="center">
+  <img src="docs/media/bullet-speed-waveform.jpg" alt="弹速采样与调参记录" width="760"><br>
+  <sub>弹速采样与调参记录：均值、方差和极差用于评估发弹一致性</sub>
+</p>
+
 ---
 
-## 9. 安全机制
+## 10. 安全机制
 
 系统在实际机器人运行中包含多级安全保护：
 
@@ -308,10 +372,10 @@ CAN
 
 
 
-## 10. 工程状态
+## 11. 工程状态
 
 该工程来自 RoboMaster 赛季实际使用的英雄机器人云台板固件，已经完成实车调试，并在比赛中得到实际验证。
 
-部分历史代码、实验性功能和已经停用的方案仍保留在工程中，用于记录赛季开发过程。
+仓库按赛季保留迭代记录，当前主线代码位于 `Modules/` 与 `Task/`。
 
 该仓库主要用于展示机器人嵌入式控制、CAN 通信、实时任务、运动控制以及实车调试相关经验。
