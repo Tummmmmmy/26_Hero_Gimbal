@@ -31,15 +31,6 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台
 
 ## 实车与演示
 
-### 官方赛事高光
-
-<p align="center">
-  <a href="https://www.bilibili.com/video/BV18tuc6LEzY">
-    <img src="docs/media/match-highlight.gif" alt="RoboMaster 2026 官方赛事高光" width="760">
-  </a><br>
-  <sub>RoboMaster 官方赛事高光 · 点击观看完整视频（Bilibili）</sub>
-</p>
-
 ### 技术演示
 
 <table>
@@ -49,12 +40,17 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台
   </tr>
 </table>
 
+### 比赛高光
+
+<p align="center">
+  <img src="docs/media/match-highlight.gif" alt="RoboMaster 2026 比赛高光" width="760"><br>
+  <sub>RoboMaster 2026 全国赛比赛高光</sub>
+</p>
+
 <p align="center">
   <img src="docs/media/competition.jpg" alt="RoboMaster 2026 全国赛现场" width="760"><br>
   <sub>RoboMaster 2026 机甲大师超级对抗赛·全国赛现场</sub>
 </p>
-
-[完整演示视频（1280×720，23.9 s，5.1 MB）](docs/media/gimbal-demo.mp4)
 
 ---
 
