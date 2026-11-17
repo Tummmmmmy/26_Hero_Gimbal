@@ -45,7 +45,7 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台
 <table>
   <tr>
     <td align="center"><img src="docs/media/gimbal-aim.gif" width="420" alt="视觉自瞄"><br>视觉自瞄与云台跟踪</td>
-    <td align="center"><img src="docs/media/gimbal-lob.gif" width="260" alt="吊射控制"><br>吊射模式云台姿态</td>
+    <td align="center"><img src="docs/media/gimbal-lob.gif" width="260" alt="22m 远程吊射"><br>22m 远程吊射</td>
   </tr>
 </table>
 
