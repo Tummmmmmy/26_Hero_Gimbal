@@ -2,7 +2,7 @@
 
 RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台双轴、双级六摩擦轮发射、视觉通信和板间协同。
 
-> **版权说明：** Copyright © 2026 Tummmmmmy. All rights reserved. 本仓库仅用于作品展示与求职评审，未经授权不得复制、修改或再分发。详见 [LICENSE](LICENSE)。
+> **版权说明：** Copyright © 2026 Tummmmmmy. All rights reserved. 本仓库仅用于作品展示，未经授权不得复制、修改或再分发。详见 [LICENSE](LICENSE)。
 
 > **项目角色：** 电控负责人，负责整车电控架构、云台板固件、控制闭环与实车联调。<br>
 > **本仓库范围：** 云台板固件；底盘板固件见 [26_Hero_Chassis](https://github.com/Tummmmmmy/26_Hero_Chassis)。
