@@ -43,13 +43,11 @@ RoboMaster 英雄机器人云台主控板的嵌入式控制程序，覆盖云台
 ### 比赛高光
 
 <p align="center">
-  <img src="docs/media/match-highlight.gif" alt="RoboMaster 2026 比赛高光" width="760"><br>
-  <sub>RoboMaster 2026 全国赛比赛高光</sub>
+  <img src="docs/media/match-highlight.gif" alt="RoboMaster 2026 比赛高光" width="760">
 </p>
 
 <p align="center">
-  <img src="docs/media/competition.jpg" alt="RoboMaster 2026 全国赛现场" width="760"><br>
-  <sub>RoboMaster 2026 机甲大师超级对抗赛·全国赛现场</sub>
+  <img src="docs/media/competition.jpg" alt="RoboMaster 2026 全国赛现场" width="760">
 </p>
 
 ---
